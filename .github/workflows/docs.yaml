@@ -45,7 +45,7 @@ jobs:
             MathlibDoc-
 
       - name: Build documentation
-        run: ~/.elan/bin/lake -R -Kenv=dev exe doc-gen4
+        run: ~/.elan/bin/lake build doc-gen4
 
       - name: Fix permissions
         run: |
