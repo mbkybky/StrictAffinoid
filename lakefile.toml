@@ -1,0 +1,24 @@
+name = "StrictAffinoid"
+version = "0.1.0"
+keywords = ["math"]
+defaultTargets = ["StrictAffinoid"]
+
+[leanOptions]
+pp.unicode.fun = true                  # pretty-prints `fun a ↦ b`
+autoImplicit = false
+relaxedAutoImplicit = false
+weak.linter.mathlibStandardSet = false
+maxSynthPendingDepth = 3
+
+[[require]]
+name = "«doc-gen4»"
+git = "https://github.com/leanprover/doc-gen4"
+rev = "main"
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/Thmoas-Guan/mathlib4_fork.git"
+rev = "AdicCompletion-IsNoetherian"
+
+[[lean_lib]]
+name = "StrictAffinoid"
