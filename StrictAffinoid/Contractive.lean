@@ -5,6 +5,11 @@ Authors: Yongle Hu
 -/
 module
 
+public import Mathlib.Analysis.Normed.Operator.Banach
+public import Mathlib.FieldTheory.Finiteness
+public import Mathlib.RingTheory.Filtration
+public import Mathlib.RingTheory.HopkinsLevitzki
+public import Mathlib.Topology.Algebra.Module.FiniteDimension
 public import StrictAffinoid.Weierstrass
 
 public section
@@ -48,10 +53,7 @@ lemma TateAlgebra.norm_eq_one_of_trivially_valued
     intro e
     exact h e
   have hge : 1 ≤ ‖F‖ := by
-    have hcoeff :
-        1 = ‖MvPowerSeries.coeff e F.1‖ :=
-      (base_norm_eq_one_of_trivially_valued htv he).symm
-    rw [hcoeff]
+    rw [← base_norm_eq_one_of_trivially_valued htv he]
     exact TateAlgebra.coeff_norm_le F e
   exact le_antisymm hle hge
 

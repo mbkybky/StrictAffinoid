@@ -45,7 +45,9 @@ jobs:
             MathlibDoc-
 
       - name: Build documentation
-        run: ~/.elan/bin/lake build doc-gen4
+        run: |
+          ~/.elan/bin/lake build StrictAffinoid:docs
+          ~/.elan/bin/lake build StrictAffinoid:docsHeader
 
       - name: Fix permissions
         run: |
@@ -54,7 +56,7 @@ jobs:
           done
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./.lake/build/doc/
           

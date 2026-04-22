@@ -5,6 +5,7 @@ Authors: Yongle Hu
 -/
 module
 
+public import Mathlib.Topology.Algebra.Valued.ValuedField
 public import StrictAffinoid.Contractive
 
 @[expose] public section

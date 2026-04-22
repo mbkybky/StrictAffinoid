@@ -110,6 +110,13 @@ end IsStrictAffinoid
 
 @[expose] public section
 
+noncomputable def AlgHom.reduction {B : Type*} [NormedCommRing B] [NormedAlgebra k B]
+    [IsStrictAffinoid k B] {f : A →ₐ[k] B} : Reduction k A →+* Reduction k B :=
+  Ideal.quotientMap (topNil k B) (IsStrictAffinoid.integerMap f).toRingHom <| by
+    intro a ha
+    simp only [mem_topologicalNilradical_iff_norm_lt_one, Ideal.mem_comap] at ha ⊢
+    exact lt_of_le_of_lt ((isContractiveHom f) a.1) ha
+
 namespace TateAlgebra
 
 variable (σ : Type*) [Finite σ] (k : Type*) [NormedField k] [IsUltrametricDist k] [CompleteSpace k]

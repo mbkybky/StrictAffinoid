@@ -5,9 +5,10 @@ Authors: Yongle Hu
 -/
 module
 
-public import StrictAffinoid.Integer
+public import Mathlib.RingTheory.AdicCompletion.Noetherian
+public import Mathlib.RingTheory.DiscreteValuationRing.Basic
+public import Mathlib.Topology.Algebra.Valued.LocallyCompact
 public import StrictAffinoid.Reduction
-public import StrictAffinoid.Weierstrass
 
 public section
 

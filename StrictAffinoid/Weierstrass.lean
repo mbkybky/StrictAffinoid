@@ -5,6 +5,12 @@ Authors: Yongle Hu
 -/
 module
 
+public import Mathlib.Analysis.Normed.Ring.Units
+public import Mathlib.Data.FunLike.Fintype
+public import Mathlib.RingTheory.AdjoinRoot
+public import Mathlib.RingTheory.MvPolynomial.IrreducibleQuadratic
+public import Mathlib.RingTheory.MvPowerSeries.Substitution
+public import Mathlib.RingTheory.PowerSeries.Basic
 public import StrictAffinoid.Basic
 
 public section
@@ -3741,7 +3747,7 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
   exact ⟨ψ0, hcontrψ0, hfinψ0⟩
 
 variable (k) (A) in
-/-- **Noether normalization**： Any nonzero strictly affinoid algebra admits a finite injective map
+/-- **Noether normalization**: Any nonzero strictly affinoid algebra admits a finite injective map
 from a Tate algebra. -/
 theorem noether_normalization : ∃ (σ : Type) (_ : Fintype σ) (φ : TateAlgebra σ k →ₐ[k] A)
     (_ : Function.Injective φ) (_ : IsContractiveHom φ.toRingHom), φ.toRingHom.Finite := by
