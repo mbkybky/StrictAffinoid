@@ -156,7 +156,7 @@ theorem integerMap_surjective_of_isDistinguishedEpi {f : A →ₐ[k] B} (hf : Is
   rcases hf b.1 with ⟨a, ha, hnorm⟩
   exact ⟨⟨a, by simpa [hnorm] using by exact b.2⟩, Subtype.ext ha⟩
 
-/-- $\widetide{f} : \widetilde{A} → \widetilde{B}$ is surjective if
+/-- $\widetilde{f} : \widetilde{A} \to \widetilde{B}$ is surjective if
 $f$ is a distinguished epimorphism. -/
 theorem reduction_surjective_of_isDistinguishedEpi {f : A →ₐ[k] B} (hf : IsDistinguishedEpi f) :
     Function.Surjective f.reduction :=
@@ -249,42 +249,6 @@ private lemma exists_topNil_lift_pow_of_image_topNil {f : A →ₐ[k] B} (hf : F
     refine ⟨1, Nat.one_pos, 0, ?_, ?_⟩
     · exact (topNil k A).zero_mem
     · simpa using (Subtype.ext hzero).symm
-
-/-- `4 → 3`. -/
-private lemma isRadical_sup_ker_of_reduction_ker_eq {f : A →ₐ[k] B}
-    (h : RingHom.ker f.reduction = Ideal.map (reductionMap k A) (RingHom.ker (integerMap f))) :
-    (topNil k A ⊔ RingHom.ker (integerMap f)).IsRadical := by
-  let q : Integer k A →+* Reduction k A := reductionMap k A
-  let K : Ideal (Integer k A) := RingHom.ker (integerMap f)
-  let J : Ideal (Integer k A) := topNil k A ⊔ K
-  have hq_surj : Function.Surjective q := Ideal.Quotient.mk_surjective
-  have hker_q : RingHom.ker q = topNil k A := by
-    ext x
-    change Ideal.Quotient.mk (topNil k A) x = 0 ↔ x ∈ topNil k A
-    rw [Ideal.Quotient.eq_zero_iff_mem]
-  have hker_q_le_J : RingHom.ker q ≤ J := by
-    rw [hker_q]
-    exact le_sup_left
-  have hmap_J : Ideal.map q J = RingHom.ker f.reduction := by
-    have hmap_eq : Ideal.map q J = Ideal.map q K := by
-      rw [(Ideal.map_eq_iff_sup_ker_eq_of_surjective q hq_surj)]
-      simp [J, hker_q, sup_comm]
-    exact hmap_eq.trans h.symm
-  have hmap_rad : Ideal.map q J.radical = Ideal.map q J := by
-    calc _ = (Ideal.map q J).radical := Ideal.map_radical_of_surjective hq_surj hker_q_le_J
-      _ = (RingHom.ker f.reduction).radical := by rw [hmap_J]
-      _ = RingHom.ker f.reduction := (Ideal.radical_eq_iff).2 f.reduction_ker_isRadical
-      _ = Ideal.map q J := hmap_J.symm
-  have hsup_eq : J.radical ⊔ RingHom.ker q = J ⊔ RingHom.ker q :=
-    (Ideal.map_eq_iff_sup_ker_eq_of_surjective q hq_surj).1 hmap_rad
-  have hJ_le_rad : J ≤ J.radical := Ideal.le_radical
-  have hrad_eq : J.radical = J := by
-    rw [hker_q] at hsup_eq
-    have htop_le_J : topNil k A ≤ J := le_sup_left
-    have hleft : J.radical ⊔ topNil k A = J.radical := sup_eq_left.2 (le_trans htop_le_J hJ_le_rad)
-    have hright : J ⊔ topNil k A = J := sup_eq_left.2 htop_le_J
-    simpa [hleft, hright] using hsup_eq
-  exact (Ideal.radical_eq_iff).1 hrad_eq
 
 theorem isDistinguishedEpi_tfae [IsDistinguished k A] {f : A →ₐ[k] B}
     (hf : Function.Surjective f) : List.TFAE
