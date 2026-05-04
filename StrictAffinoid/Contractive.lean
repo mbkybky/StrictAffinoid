@@ -161,15 +161,15 @@ private lemma isClosed_of_isStrictAffinoid_of_nontriviallyNormed (k : Type*)
     [NontriviallyNormedField k] [CompleteSpace k] [IsUltrametricDist k]
     {A : Type*} [NormedCommRing A] [NormedAlgebra k A] [IsStrictAffinoid k A] (I : Ideal A) :
     IsClosed (I : Set A) := by
-  letI : IsNoetherianRing A := IsStrictAffinoid.isNoetherianRing k A
+  have : IsNoetherianRing A := IsStrictAffinoid.isNoetherianRing k A
   have hI_fg : I.closure.FG := IsNoetherian.noetherian I.closure
   rcases Submodule.fg_def.mp hI_fg with ⟨S, hSfin, hspan⟩
-  letI : Fintype S := hSfin.fintype
+  have : Fintype S := hSfin.fintype
   have hclosedClosure : IsClosed (I.closure : Set A) := by
     simp [Ideal.coe_closure]
-  letI : IsClosed (((I.closure.restrictScalars k : Submodule k A) : Set A)) := by
+  have : IsClosed (((I.closure.restrictScalars k : Submodule k A) : Set A)) := by
     exact hclosedClosure
-  letI : CompleteSpace (I.closure.restrictScalars k) := by
+  have : CompleteSpace (I.closure.restrictScalars k) := by
     let s : Set A := ((I.closure.restrictScalars k : Submodule k A) : Set A)
     infer_instance
   let ψ : (S → A) →ₗ[A] A :=
@@ -402,18 +402,14 @@ end Ideal
 
 end closed_ideals
 
-namespace IsStrictAffinoid
-
-section finite_quotient
-
 omit [CompleteSpace k] in
-lemma _root_.TateAlgebra.not_exist_injective_to_field {K : Type*} [NormedCommRing K] [NormedAlgebra k K]
+lemma TateAlgebra.not_exist_injective_to_field {K : Type*} [NormedCommRing K] [NormedAlgebra k K]
     (n : ℕ) (hK : IsField K) (φ : TateAlgebra (Fin (n + 1)) k →ₐ[k] K) (hφfin : φ.Finite)
     (hφinj : Function.Injective φ) : False := by
   algebraize [φ.toRingHom]
   have : Algebra.IsIntegral (TateAlgebra (Fin (n + 1)) k) K :=
     (algebraMap_isIntegral_iff).mp (RingHom.IsIntegral.of_finite hφfin)
-  letI : Field (TateAlgebra (Fin (n + 1)) k) := (isField_of_isIntegral_of_isField hφinj hK).toField
+  let : Field (TateAlgebra (Fin (n + 1)) k) := (isField_of_isIntegral_of_isField hφinj hK).toField
   have hXne : (TateAlgebra.X 0 : TateAlgebra (Fin (n + 1)) k) ≠ 0 := by
     intro hX
     have hcoeff := congrArg (fun F : TateAlgebra (Fin (n + 1)) k =>
@@ -426,9 +422,9 @@ lemma _root_.TateAlgebra.not_exist_injective_to_field {K : Type*} [NormedCommRin
     simp [TateAlgebra.constantCoeff_apply] at hmap
   exact (IsUnit.ne_zero h0u) rfl
 
-lemma _root_.TateAlgebra.module_finite_of_exist_finite_algHom_to_field {K : Type*} [NormedCommRing K]
+lemma TateAlgebra.module_finite_of_exist_finite_algHom_to_field {K : Type*} [NormedCommRing K]
     [NormedAlgebra k K] (hK : IsField K) (n : ℕ) (φ : TateAlgebra (Fin n) k →ₐ[k] K)
-    (hφcontr : IsContractiveHom φ.toRingHom) (hφfin : φ.Finite) : Module.Finite k K := by
+    (hφcontr : IsContractiveHom φ) (hφfin : φ.Finite) : Module.Finite k K := by
   induction n with
   | zero =>
       let θ : k →ₐ[k] K := φ.comp finZeroAlgEquiv.symm.toAlgHom
@@ -450,14 +446,18 @@ lemma _root_.TateAlgebra.module_finite_of_exist_finite_algHom_to_field {K : Type
       · rcases IsStrictAffinoid.noether_normalization_drop φ hφcontr hφfin hφinj with ⟨ψ, hψc, hψf⟩
         exact ih ψ hψc hψf
 
+namespace IsStrictAffinoid
+
+section finite_quotient
+
 variable (k)
 
 instance finiteDimensional_quotient_of_isMaximal (m : Ideal A) [m.IsMaximal] :
     FiniteDimensional k (A ⧸ m) := by
-  letI : Field (A ⧸ m) := Ideal.Quotient.field m
+  let : Field (A ⧸ m) := Ideal.Quotient.field m
   rcases IsStrictAffinoid.exists_fin_contractve_presentation k A with ⟨n, φ, hφcontr, hφsurj⟩
   let ψ : TateAlgebra (Fin n) k →ₐ[k] A ⧸ m := (Ideal.Quotient.mkₐ k m).comp φ
-  have hψcontr : IsContractiveHom ψ.toRingHom := by
+  have hψcontr : IsContractiveHom ψ := by
     intro x
     exact le_trans (Ideal.Quotient.norm_mk_le m _) (hφcontr x)
   have hψsurj : Function.Surjective ψ := by
@@ -471,78 +471,51 @@ instance finiteDimensional_quotient_of_isMaximal (m : Ideal A) [m.IsMaximal] :
 /-- Let `a` be an ideal of a strictly `k`-affinoid algebra `A` such that its radical `rad a` is a
   maximal ideal. Then `A / a` is of finite dimension over `k`. -/
 instance finiteDimensional_quotient_of_radical_isMaximal (a : Ideal A) [a.radical.IsMaximal] :
-    FiniteDimensional k (A ⧸ a) := by
-  let R := A ⧸ a
-  letI : IsNoetherianRing A := IsStrictAffinoid.isNoetherianRing k A
-  let e := DoubleQuot.quotQuotEquivQuotOfLEₐ k (show a ≤ a.radical from Ideal.le_radical)
-  have hnil : Ideal.map (Ideal.Quotient.mk a) a.radical = nilradical R := by
-    rw [Ideal.map_radical_of_surjective Ideal.Quotient.mk_surjective (by simp)]
-    simp [R, nilradical]
-  have hnilmax : (nilradical R).IsMaximal := by
-    rw [← hnil]
-    refine Ideal.Quotient.maximal_of_isField _ ?_
-    letI : Field (A ⧸ a.radical) := Ideal.Quotient.field a.radical
-    exact MulEquiv.isField (Field.toIsField (A ⧸ a.radical)) e.toMulEquiv
-  letI : Ring.KrullDimLE 0 R := Ring.KrullDimLE.of_isMaximal_nilradical R
-  letI : IsArtinianRing R := IsNoetherianRing.isArtinianRing_of_krullDimLE_zero
-  letI : IsLocalRing R := IsLocalRing.of_isMaximal_nilradical R
-  have hjac : Ring.jacobson R = nilradical R := by
-    rw [IsLocalRing.ringJacobson_eq_maximalIdeal, Ring.KrullDimLE.nilradical_eq_maximalIdeal]
-  haveI : Module.Finite k (R ⧸ Ring.jacobson R) :=
-    Module.Finite.equiv <| AlgEquiv.toLinearEquiv <| AlgEquiv.trans
-      (e.symm.trans (Ideal.quotientEquivAlgOfEq k hnil)) (Ideal.quotientEquivAlgOfEq k hjac).symm
-  letI : Module.Finite k R := IsSemiprimaryRing.finite_of_isArtinian k R R
-  exact Module.Basis.finiteDimensional_of_finite (IsNoetherian.finsetBasis k R)
+    FiniteDimensional k (A ⧸ a) :=
+  have : IsNoetherianRing A := IsStrictAffinoid.isNoetherianRing k A
+  Module.Finite.quotient_of_quotient_radical_finite k a
 
 end finite_quotient
 
 section isContractiveHom
 
-lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f.toRingHom := by
+/-- Any `k`-algebra homomorphism between strict `k`-affinoid algebras is contractive. -/
+lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f := by
   by_cases htv : ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1
   · let : NontriviallyNormedField k := NontriviallyNormedField.ofNormNeOne htv
     have : IsNoetherianRing B := IsStrictAffinoid.isNoetherianRing k B
     have hfcont : Continuous f.toLinearMap := by
       apply LinearMap.continuous_of_seq_closed_graph
       intro u x y hx hy
-      have hux' : Tendsto (fun n => u n - x) atTop (𝓝 (x - x)) := by
-        exact Tendsto.sub hx tendsto_const_nhds
-      have hux : Tendsto (fun n => u n - x) atTop (𝓝 0) := by
-        simpa using hux'
+      have hux' : Tendsto (fun n => u n - x) atTop (𝓝 (x - x)) := Tendsto.sub hx tendsto_const_nhds
+      have hux : Tendsto (fun n => u n - x) atTop (𝓝 0) := by simpa using hux'
       have huy : Tendsto (fun n => f (u n - x)) atTop (𝓝 (y - f x)) := by
         simpa [map_sub] using
           Tendsto.sub hy (tendsto_const_nhds : Tendsto (fun _ : ℕ => f x) atTop (𝓝 (f x)))
       let z : B := y - f x
-      have hzpow : ∀ (m : Ideal B) (_ : m.IsMaximal) (n : ℕ), z ∈ m ^ n.succ := by
-        intro m hm n
+      have hzpow (m : Ideal B) (hm : m.IsMaximal) (n : ℕ) : z ∈ m ^ n.succ := by
         have hradmax : (m ^ n.succ).radical.IsMaximal := by
           rw [Ideal.radical_pow m n.succ_ne_zero, Ideal.IsPrime.radical hm.isPrime]
           exact hm
         let q : B →ₐ[k] B ⧸ m ^ n.succ := Ideal.Quotient.mkₐ k (m ^ n.succ)
         have hqz0 : q z = 0 := by
           by_contra hqz0
-          let I : Ideal A := Ideal.comap f.toRingHom (m ^ n.succ)
-          haveI : IsClosed ((m ^ n.succ : Ideal B) : Set B) :=
+          let I : Ideal A := Ideal.comap f (m ^ n.succ)
+          have : IsClosed ((m ^ n.succ : Ideal B) : Set B) :=
             Ideal.isClosed_of_isStrictAffinoid k (m ^ n.succ)
-          haveI : IsClosed (I : Set A) := I.isClosed_of_isStrictAffinoid k
+          have : IsClosed (I : Set A) := I.isClosed_of_isStrictAffinoid k
           let p : A →ₐ[k] A ⧸ I := Ideal.Quotient.mkₐ k I
-          have hIzeroAlg : ∀ a ∈ I, (q.comp f) a = 0 := by
-            intro a ha
-            exact Ideal.Quotient.eq_zero_iff_mem.2 ha
-          let F : A ⧸ I →ₐ[k] B ⧸ m ^ n.succ := Ideal.Quotient.liftₐ I (q.comp f) hIzeroAlg
-          have hIzeroRing : ∀ a ∈ I, ((q.comp f).toRingHom) a = 0 := by
-            intro a ha
-            exact hIzeroAlg a ha
-          have hker : RingHom.ker ((q.comp f).toRingHom) = I := by
+          have hIz (a : A) (ha: a ∈ I) : (q.comp f) a = 0 := Ideal.Quotient.eq_zero_iff_mem.2 ha
+          let F : A ⧸ I →ₐ[k] B ⧸ m ^ n.succ := Ideal.Quotient.liftₐ I (q.comp f) hIz
+          have hker : RingHom.ker ((q.comp f)) = I := by
             ext a
             change ((Ideal.Quotient.mk (m ^ n.succ)) (f a) = 0) ↔ f a ∈ m ^ n.succ
             simp [Ideal.Quotient.eq_zero_iff_mem]
-          have hFinj :
-              Function.Injective (Ideal.Quotient.lift I ((q.comp f).toRingHom) hIzeroRing) :=
-            (Ideal.injective_lift_iff hIzeroRing).2 hker
+          have hFinj : Function.Injective (Ideal.Quotient.lift I ((q.comp f).toRingHom) hIz) :=
+            (Ideal.injective_lift_iff hIz).2 hker
           have hF_inj : Function.Injective F := by
             simpa [F, Ideal.Quotient.liftₐ] using hFinj
-          haveI : FiniteDimensional k (A ⧸ I) := FiniteDimensional.of_injective F.toLinearMap hF_inj
+          have : FiniteDimensional k (A ⧸ I) := FiniteDimensional.of_injective F.toLinearMap hF_inj
           let b := Module.Basis.ofVectorSpace k (B ⧸ m ^ n.succ)
           obtain ⟨i, hi⟩ : ∃ i, b.repr (q z) i ≠ 0 := by
             by_contra h
@@ -552,38 +525,28 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f.toRingHom := by
             ext j
             simpa using h j
           let l : (B ⧸ m ^ n.succ) →ₗ[k] k := b.coord i
-          have hlqz : l (q z) ≠ 0 := by
-            simpa [l] using hi
-          have hpcont : Continuous p.toLinearMap := by
-            exact continuous_of_contractive p.toRingHom (fun a => Ideal.Quotient.norm_mk_le I a)
-          have hqcont : Continuous q.toLinearMap := by
-            exact continuous_of_contractive q.toRingHom
-              (fun b => Ideal.Quotient.norm_mk_le (m ^ n.succ) b)
-          have hFcont : Continuous F.toLinearMap :=
-            LinearMap.continuous_of_finiteDimensional F.toLinearMap
+          have hpcont : Continuous p.toLinearMap :=
+            continuous_of_contractive p.toRingHom (fun a => Ideal.Quotient.norm_mk_le I a)
+          have hqcont : Continuous q.toLinearMap :=
+            continuous_of_contractive q.toRingHom (fun b => Ideal.Quotient.norm_mk_le _ b)
+          have hFcont : Continuous F.toLinearMap := F.toLinearMap.continuous_of_finiteDimensional
           have hlcont : Continuous l := LinearMap.continuous_of_finiteDimensional l
-          have hFp : F.comp p = q.comp f := Ideal.Quotient.liftₐ_comp I (q.comp f) hIzeroAlg
+          have hFp : F.comp p = q.comp f := Ideal.Quotient.liftₐ_comp I (q.comp f) hIz
           let g : A →ₗ[k] k := (l.comp F.toLinearMap).comp p.toLinearMap
           let h : B →ₗ[k] k := l.comp q.toLinearMap
           have hgcont : Continuous g := (hlcont.comp hFcont).comp hpcont
           have hhcont : Continuous h := hlcont.comp hqcont
           have hgf : ∀ a : A, g a = h (f a) := by
             intro a
-            have hFpa : F (p a) = q (f a) := by
-              exact congrArg (fun φ : A →ₐ[k] B ⧸ m ^ n.succ => φ a) hFp
+            have hFpa : F (p a) = q (f a) := congrArg (fun φ : A →ₐ[k] B ⧸ m ^ n.succ => φ a) hFp
             exact congrArg l hFpa
           have ht0g : Tendsto (fun j => g (u j - x)) atTop (𝓝 0) := by
-            change Tendsto (⇑g ∘ fun j => u j - x) atTop (𝓝 0)
+            change Tendsto (g ∘ fun j => u j - x) atTop (𝓝 0)
             have hg0 : g 0 = 0 := by simp [g]
             simpa [hg0] using Tendsto.comp (Continuous.tendsto hgcont 0) hux
-          have ht0 : Tendsto (fun j => h (f (u j - x))) atTop (𝓝 0) := by
-            simpa [hgf] using ht0g
-          have htz' : Tendsto (fun j => h (f (u j - x))) atTop (𝓝 (h z)) := by
-            change Tendsto (⇑h ∘ fun j => f (u j - x)) atTop (𝓝 (h z))
-            exact Tendsto.comp (Continuous.tendsto hhcont z) huy
-          have htz : Tendsto (fun j => h (f (u j - x))) atTop (𝓝 (l (q z))) := by
-            simpa [h] using htz'
-          exact hlqz (tendsto_nhds_unique htz ht0)
+          have htz : Tendsto (fun j => h (f (u j - x))) atTop (𝓝 (l (q z))) :=
+            Tendsto.comp (Continuous.tendsto hhcont z) huy
+          exact hi (tendsto_nhds_unique htz ht0g)
         exact Ideal.Quotient.eq_zero_iff_mem.1 hqz0
       let Ann : Ideal B :=
         { carrier := {b : B | b * z = 0}
@@ -623,33 +586,25 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f.toRingHom := by
           exact (Ideal.ne_top_iff_one m).1 hm.ne_top h1
         exact hnot h1rm
       have hz0 : z = 0 := by
-        have h1ann : (1 : B) ∈ Ann := by
-          simp [hAnn_top]
+        have h1ann : (1 : B) ∈ Ann := by simp [hAnn_top]
         have h1ann' : (1 : B) * z = 0 := h1ann
         simpa [one_mul] using h1ann'
-      have : y - f x = 0 := by simpa [z] using hz0
-      exact sub_eq_zero.mp this
+      exact sub_eq_zero.mp hz0
     let g : A →L[k] B := { toLinearMap := f.toLinearMap, cont := hfcont }
-    have hg_bound (a : A) : ‖f a‖ ≤ ‖g‖ * ‖a‖ := by
-      simpa [g] using g.le_opNorm a
+    have hg_bound (a : A) : ‖f a‖ ≤ ‖g‖ * ‖a‖ := g.le_opNorm a
     intro a
     by_cases ha0 : a = 0
     · simp [ha0]
     · by_contra hfa
       have hlt : ‖a‖ < ‖f a‖ := lt_of_not_ge hfa
       have hnorma_pos : 0 < ‖a‖ := norm_pos_iff.mpr ha0
-      have hratio : 1 < ‖f a‖ / ‖a‖ := by
-        simpa using (one_lt_div hnorma_pos).2 hlt
+      have hratio : 1 < ‖f a‖ / ‖a‖ := (one_lt_div hnorma_pos).2 hlt
       obtain ⟨n, hn⟩ := pow_unbounded_of_one_lt ‖g‖ hratio
-      have hpowB : ‖(f a) ^ n‖ = ‖f a‖ ^ n := by
-        simpa using IsStrictAffinoid.withSpectralNorm k n (f a)
-      have hpowA : ‖a ^ n‖ = ‖a‖ ^ n := by
-        simpa using IsStrictAffinoid.withSpectralNorm k n a
       have hboundn : ‖f a‖ ^ n ≤ ‖g‖ * ‖a‖ ^ n := by
-        have h1 : ‖f a‖ ^ n = ‖(f a) ^ n‖ := hpowB.symm
+        have h1 : ‖f a‖ ^ n = ‖(f a) ^ n‖ := (IsStrictAffinoid.withSpectralNorm k n (f a)).symm
         have h2 : ‖(f a) ^ n‖ = ‖f (a ^ n)‖ := by simp
         have h3 : ‖f (a ^ n)‖ ≤ ‖g‖ * ‖a ^ n‖ := hg_bound (a ^ n)
-        have h4 : ‖g‖ * ‖a ^ n‖ = ‖g‖ * ‖a‖ ^ n := by rw [hpowA]
+        have h4 : ‖g‖ * ‖a ^ n‖ = ‖g‖ * ‖a‖ ^ n := by rw [IsStrictAffinoid.withSpectralNorm k n a]
         exact h1.trans_le (h2.trans_le (h3.trans_eq h4))
       have hapos_pow : 0 < ‖a‖ ^ n := pow_pos hnorma_pos _
       have hmul : (‖f a‖ / ‖a‖) ^ n * ‖a‖ ^ n = ‖f a‖ ^ n := by
@@ -664,9 +619,8 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f.toRingHom := by
     · simp [ha]
     · by_cases hfa : f a = 0
       · simp [hfa]
-      · change ‖f a‖ ≤ ‖a‖
-        rw [IsStrictAffinoid.norm_eq_one_of_trivially_valued htv hfa,
-          IsStrictAffinoid.norm_eq_one_of_trivially_valued htv ha]
+      · rw [IsStrictAffinoid.norm_eq_one_of_trivially_valued htv hfa]
+        rw [IsStrictAffinoid.norm_eq_one_of_trivially_valued htv ha]
 
 variable (k A B) in
 theorem isBoundedSMul [Algebra A B] [IsScalarTower k A B] : IsBoundedSMul A B := by
@@ -685,17 +639,17 @@ variable {k : Type*} [NontriviallyNormedField k] [CompleteSpace k] [IsUltrametri
   {A B : Type*} [NormedCommRing A] [NormedAlgebra k A]
   [IsStrictAffinoid k A] [NormedCommRing B] [NormedAlgebra k B] [IsStrictAffinoid k B]
 
-/-- A surjective morphism between strict affinoid algebras is admissible. -/
+/-- Any surjective morphism between strict affinoid algebras is admissible. -/
 theorem admissible_of_surjective (f : A →ₐ[k] B)
-    (hf : Function.Surjective f) : IsAdmissibleHom f.toRingHom := by
+    (hf : Function.Surjective f) : IsAdmissibleHom f := by
   let g : A →L[k] B := f.toLinearMap.mkContinuous 1 <|
     fun x => by simpa using (IsStrictAffinoid.isContractiveHom f x)
   obtain ⟨C, hCpos, hC⟩ := ContinuousLinearMap.exists_preimage_norm_le g hf
   refine ⟨max C 1, lt_of_lt_of_le zero_lt_one (le_max_right C 1), ?_⟩
   intro x
   constructor
-  · change sInf {r : ℝ | ∃ a : A, f.toRingHom a = f.toRingHom x ∧ ‖a‖ = r} ≤ max C 1 * ‖f x‖
-    let Q : Set ℝ := {r : ℝ | ∃ a : A, f.toRingHom a = f.toRingHom x ∧ ‖a‖ = r}
+  · change sInf {r : ℝ | ∃ a : A, f a = f x ∧ ‖a‖ = r} ≤ max C 1 * ‖f x‖
+    let Q : Set ℝ := {r : ℝ | ∃ a : A, f a = f x ∧ ‖a‖ = r}
     have hQbdd : BddBelow Q := by
       refine ⟨0, ?_⟩
       intro r hr
@@ -710,8 +664,7 @@ theorem admissible_of_surjective (f : A →ₐ[k] B)
       exact le_max_left C 1
   · change ‖f x‖ ≤ max C 1 * ‖x‖
     calc
-      ‖f x‖ ≤ 1 * ‖x‖ := by
-        simpa using (IsStrictAffinoid.isContractiveHom f x)
+      ‖f x‖ ≤ 1 * ‖x‖ := by simpa using (IsStrictAffinoid.isContractiveHom f x)
       _ ≤ max C 1 * ‖x‖ := by
         gcongr
         exact le_max_right C 1
@@ -728,22 +681,20 @@ lemma _root_.TateAlgebra.hom_ext {σ : Type*} [Finite σ] {f g : TateAlgebra σ 
     have hf := IsStrictAffinoid.isContractiveHom f
     have hLip : LipschitzWith 1 f := by
       intro x y
-      simpa [edist_dist, dist_eq_norm, ENNReal.coe_one, one_mul, sub_eq_add_neg, add_comm,
-        add_left_comm, add_assoc] using (ENNReal.ofReal_le_ofReal (hf (x - y)))
+      simpa [edist_dist, dist_eq_norm] using
+        ENNReal.ofReal_le_ofReal ((IsStrictAffinoid.isContractiveHom f) (x - y))
     exact hLip.continuous
   have hgcont : Continuous g := by
-    have hg := IsStrictAffinoid.isContractiveHom g
     have hLip : LipschitzWith 1 g := by
       intro x y
-      simpa [edist_dist, dist_eq_norm, ENNReal.coe_one, one_mul, sub_eq_add_neg, add_comm,
-        add_left_comm, add_assoc] using (ENNReal.ofReal_le_ofReal (hg (x - y)))
+      simpa [edist_dist, dist_eq_norm] using
+        ENNReal.ofReal_le_ofReal ((IsStrictAffinoid.isContractiveHom g) (x - y))
     exact hLip.continuous
   have hpoly_fun : (fun p : MvPolynomial σ k => f p.toTate) =
       fun p : MvPolynomial σ k => g p.toTate := by
     exact congrArg (fun h : MvPolynomial σ k →ₐ[k] A => ⇑h) hpoly
-  have hfg_fun :
-      (f : TateAlgebra σ k → A) = g := by
-    exact DenseRange.equalizer (MvPolynomial.toTate_denseRange σ k) hfcont hgcont hpoly_fun
+  have hfg_fun : ⇑f = ⇑g :=
+    DenseRange.equalizer (MvPolynomial.toTate_denseRange σ k) hfcont hgcont hpoly_fun
   exact AlgHom.ext fun x => by simpa using congrArg (fun h : TateAlgebra σ k → A => h x) hfg_fun
 
 end IsStrictAffinoid

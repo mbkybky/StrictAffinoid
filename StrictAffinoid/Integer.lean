@@ -67,8 +67,38 @@ instance : IsScalarTower 𝒪[k] k A := IsScalarTower.of_algebraMap_eq' rfl
 
 end inst
 
-variable {k A} in
+section simp
+
+variable {k A}
+
 lemma integer_norm_le (a : Integer k A) : ‖a‖ ≤ 1 := a.2
+
+@[simp]
+lemma integer_zero_val : (0 : Integer k A).val = 0 := rfl
+
+@[simp]
+lemma integer_one_val : (1 : Integer k A).val = 1 := rfl
+
+@[simp]
+lemma integer_add_val (F G : Integer k A) : (F + G).val = F.val + G.val := rfl
+
+@[simp]
+lemma integer_mul_val (F G : Integer k A) : (F * G).val = F.val * G.val := rfl
+
+@[simp]
+lemma integer_pow_val (F : Integer k A) (n : ℕ) : (F ^ n).val = F.val ^ n := rfl
+
+@[simp]
+lemma integer_neg_val (F : Integer k A) : (- F).val = - F.val := rfl
+
+@[simp]
+lemma integer_sub_val (F G : Integer k A) : (F - G).val = F.val - G.val := rfl
+
+@[simp]
+lemma integer_algebraMap_val (r : 𝒪[k]) :
+    (algebraMap 𝒪[k] (Integer k A) r).val = algebraMap 𝒪[k] A r := rfl
+
+end simp
 
 variable {k A B} in
 /-- The induced morphism `f° : A° → B°` on rings of integers for a contractive morphism. -/
@@ -103,13 +133,8 @@ lemma norm_finset_sum_le_of_forall_le {A : Type*} [NormedCommRing A] [IsUltramet
   · intro h
     simpa using hC
   · intro a s ha ih h
-    have ha' : ‖f a‖ ≤ C := h a (by simp)
-    have hs' : ∀ b, b ∈ s → ‖f b‖ ≤ C := by
-      intro b hb
-      exact h b (by simp [hb])
-    have hsum : ‖∑ b ∈ s, f b‖ ≤ C := ih hs'
-    simpa [Finset.sum_insert ha] using
-      le_trans (IsUltrametricDist.norm_add_le_max _ _) (max_le ha' hsum)
+    simpa [Finset.sum_insert ha] using (IsUltrametricDist.norm_add_le_max _ _).trans <|
+      max_le (h a (by simp)) (ih (fun b hb ↦ h b (by simp [hb])))
 
 lemma norm_prod_pow_le_one {σ : Type*} (a : σ → Integer k A) (d : σ →₀ ℕ) :
     ‖d.prod (fun s e ↦ ((a s).1 ^ e))‖ ≤ 1 := by
@@ -145,12 +170,11 @@ lemma eval_monomial_norm_le {σ : Type*} (a : σ → Integer k A)
   have hmul :
       ‖algebraMap k A c * d.prod (fun s e ↦ ((a s).1 ^ e))‖ ≤
         ‖algebraMap k A c‖ * ‖d.prod (fun s e ↦ ((a s).1 ^ e))‖ := norm_mul_le _ _
-  have hle : ‖algebraMap k A c‖ * ‖d.prod (fun s e ↦ ((a s).1 ^ e))‖ ≤ ‖c‖ * 1 := by
-    exact mul_le_mul halg (norm_prod_pow_le_one a d) (norm_nonneg _) (norm_nonneg _)
+  have hle : ‖algebraMap k A c‖ * ‖d.prod (fun s e ↦ ((a s).1 ^ e))‖ ≤ ‖c‖ * 1 :=
+    mul_le_mul halg (norm_prod_pow_le_one a d) (norm_nonneg _) (norm_nonneg _)
   exact hmono.trans_le (hmul.trans (hle.trans_eq (by rw [mul_one])))
 
-lemma eval_poly_norm_le {σ : Type*} (a : σ → IsStrictAffinoid.Integer k A)
-    (p : MvPolynomial σ k) :
+lemma eval_poly_norm_le {σ : Type*} (a : σ → IsStrictAffinoid.Integer k A) (p : MvPolynomial σ k) :
     ‖(MvPolynomial.aeval fun s ↦ (a s).1) p‖ ≤ ‖p.toTate‖ := by
   let ε : MvPolynomial σ k →ₐ[k] A := MvPolynomial.aeval fun s ↦ (a s).1
   have hsum :
@@ -194,10 +218,10 @@ lemma exists_tateAlgHom_of_powerbounded
     {σ : Type*} (a : σ → IsStrictAffinoid.Integer k A) :
     ∃ φ : TateAlgebra σ k →ₐ[k] A, ∀ s : σ, φ (TateAlgebra.X s) = (a s).1 := by
   let polyMetric : PseudoMetricSpace (MvPolynomial σ k) :=
-    PseudoMetricSpace.induced (MvPolynomial.toTate.toRingHom) inferInstance
+    PseudoMetricSpace.induced MvPolynomial.toTate inferInstance
   let : UniformSpace (MvPolynomial σ k) := polyMetric.toUniformSpace
   let polyEval : MvPolynomial σ k →ₐ[k] A := MvPolynomial.aeval fun s ↦ (a s).1
-  have hPolyToTate : IsUniformInducing (MvPolynomial.toTate (σ := σ) (R := k)).toRingHom := by
+  have hPolyToTate : IsUniformInducing (MvPolynomial.toTate (σ := σ) (R := k)) := by
     rw [isUniformInducing_iff_uniformSpace]
     rfl
   have hPolyEvalLip : LipschitzWith 1 polyEval := by
@@ -235,12 +259,11 @@ open IsStrictAffinoid
 
 variable (σ : Type*) [Finite σ] (k : Type*) [NormedField k] [CompleteSpace k] [IsUltrametricDist k]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The canonical ring equivalence between the Tate algebra over the valuation ring `𝒪[k]`
 and the ring of integers of the Tate algebra over the field `k`. -/
 noncomputable def integerEquiv : TateAlgebra σ 𝒪[k] ≃+* Integer k (TateAlgebra σ k) where
   __ :=
-    letI f : TateAlgebra σ 𝒪[k] →+* TateAlgebra σ k :=
+    let f : TateAlgebra σ 𝒪[k] →+* TateAlgebra σ k :=
       (MvPowerSeries.map 𝒪[k].subtype).restrict _ _ (fun _ h ↦ h)
     f.codRestrict _ <| fun x ↦ by
       simpa [norm_def, gaussNorm] using ciSup_le (fun e ↦ ((MvPowerSeries.coeff e) x.1).2)

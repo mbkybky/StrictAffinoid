@@ -17,13 +17,11 @@ variable {k : Type*} [NormedField k] [IsUltrametricDist k] [CompleteSpace k]
   {A : Type*} [NormedCommRing A] [NormedAlgebra k A] [IsStrictAffinoid k A]
 
 omit [CompleteSpace k] in
-theorem Valued.mem_maximalIdeal_iff_norm_lt_one (x : 𝒪[k]) :
-    x ∈ 𝓂[k] ↔ ‖x‖ < 1 :=
+theorem Valued.mem_maximalIdeal_iff_norm_lt_one (x : 𝒪[k]) : x ∈ 𝓂[k] ↔ ‖x‖ < 1 :=
   (IsLocalRing.mem_maximalIdeal x).trans Valuation.Integer.not_isUnit_iff_valuation_lt_one
 
 omit [CompleteSpace k] in
-theorem Valued.mem_maximalIdeal_iff_norm_lt_one' (x : 𝒪[k]) :
-    x ∈ 𝓂[k] ↔ ‖x.val‖ < 1 :=
+theorem Valued.mem_maximalIdeal_iff_norm_lt_one' (x : 𝒪[k]) : x ∈ 𝓂[k] ↔ ‖x.val‖ < 1 :=
   mem_maximalIdeal_iff_norm_lt_one x
 
 namespace IsStrictAffinoid
@@ -72,10 +70,20 @@ theorem mem_topologicalNilradical_iff_norm_lt_one' (a : Integer k A) :
     a ∈ topNil k A ↔ ‖a.val‖ < 1 :=
   mem_topologicalNilradical_iff_norm_lt_one a
 
+variable (k A)
+
+theorem topNil_isRadical : (topNil k A).IsRadical := by
+  refine (Ideal.isRadical_iff_pow_one_lt 2 Nat.one_lt_two).mpr (fun a ha ↦ ?_)
+  rw [mem_topologicalNilradical_iff_norm_lt_one] at ha ⊢
+  have ha' : ‖a.1 ^ 2‖ < 1 := ha
+  have hpow : ‖a.1‖ ^ 2 < 1 := by simpa [IsStrictAffinoid.withSpectralNorm k 2 a.1] using ha'
+  by_contra hlt
+  exact (not_lt_of_ge (one_le_pow₀ (le_of_not_gt hlt))) hpow
+
 @[expose] public section
 
-variable (k A) in
-/-- `\widetilde{A} := A° / A°°` is the reduction of the strict affinoid algebra `A`. -/
+/-- $\widetilde{A} := A^{\circ} / A^{\circ\circ}$ is the reduction of the
+strict affinoid algebra $A$. -/
 def Reduction : Type _ := Integer k A ⧸ topNil k A
 
 section inst
@@ -97,10 +105,12 @@ instance : (topNil k A).LiesOver 𝓂[k] := by
 noncomputable instance : Algebra 𝓀[k] (Reduction k A) :=
   Ideal.Quotient.algebraOfLiesOver (topNil k A) 𝓂[k]
 
+instance : IsReduced (Reduction k A) :=
+  (Ideal.isRadical_iff_quotient_reduced (topNil k A)).1 (topNil_isRadical k A)
+
 end inst
 
-variable (k A) in
-/-- The canonical reduction map from `A°` to the reduction `\widetilde{A}`. -/
+/-- The canonical reduction map from $A^{\circ}$ to the reduction $\widetilde{A}$. -/
 noncomputable abbrev reductionMap : Integer k A →+* Reduction k A :=
   Ideal.Quotient.mk (topNil k A)
 
@@ -110,22 +120,31 @@ end IsStrictAffinoid
 
 @[expose] public section
 
-noncomputable def AlgHom.reduction {B : Type*} [NormedCommRing B] [NormedAlgebra k B]
-    [IsStrictAffinoid k B] {f : A →ₐ[k] B} : Reduction k A →+* Reduction k B :=
+namespace AlgHom
+
+variable {B : Type*} [NormedCommRing B] [NormedAlgebra k B] [IsStrictAffinoid k B] {f : A →ₐ[k] B}
+
+/-- $\widetide{f} : \widetilde{A} → \widetilde{B}$ is the reduction of $f$. -/
+noncomputable def reduction : Reduction k A →+* Reduction k B :=
   Ideal.quotientMap (topNil k B) (IsStrictAffinoid.integerMap f).toRingHom <| by
     intro a ha
     simp only [mem_topologicalNilradical_iff_norm_lt_one, Ideal.mem_comap] at ha ⊢
     exact lt_of_le_of_lt ((isContractiveHom f) a.1) ha
 
+theorem reduction_ker_isRadical : (RingHom.ker f.reduction).IsRadical :=
+  Ideal.IsRadical.comap f.reduction Ideal.isRadical_bot
+
+end AlgHom
+
 namespace TateAlgebra
 
 variable (σ : Type*) [Finite σ] (k : Type*) [NormedField k] [IsUltrametricDist k] [CompleteSpace k]
 
-noncomputable abbrev toReduction : MvPolynomial σ 𝒪[k] →+* Reduction k (TateAlgebra σ k) :=
+noncomputable abbrev mvPolynomialToReduction :
+    MvPolynomial σ 𝒪[k] →+* Reduction k (TateAlgebra σ k) :=
   (reductionMap k (TateAlgebra σ k)).comp <| (integerEquiv σ k).toRingHom.comp <|
-    @MvPolynomial.toTate σ 𝒪[k] _ (_)
+    @MvPolynomial.toTate σ 𝒪[k] _ _
 
-set_option backward.isDefEq.respectTransparency false in
 private theorem norm_integerEquiv_toTate_lt_one_iff (p : MvPolynomial σ 𝒪[k]) :
     ‖((integerEquiv σ k) (MvPolynomial.toTate p)).1‖ < 1 ↔
       ∀ m : σ →₀ ℕ, ‖↑(MvPolynomial.coeff m p)‖ < 1 := by
@@ -146,8 +165,7 @@ private theorem norm_integerEquiv_toTate_lt_one_iff (p : MvPolynomial σ 𝒪[k]
         _ = ‖MvPolynomial.coeff m p‖ := hcoeff m
         _ < 1 := h m
 
-set_option backward.isDefEq.respectTransparency false in
-theorem toReduction_surjective : Function.Surjective (toReduction σ k) := by
+theorem mvPolynomialToReduction_surjective : Function.Surjective (mvPolynomialToReduction σ k) := by
   intro y
   obtain ⟨x, rfl⟩ := Ideal.Quotient.mk_surjective y
   let F : TateAlgebra σ 𝒪[k] := (integerEquiv σ k).symm x
@@ -155,15 +173,15 @@ theorem toReduction_surjective : Function.Surjective (toReduction σ k) := by
     ⟨G, hG, hdist⟩
   rcases hG with ⟨p, rfl⟩
   refine ⟨p, ?_⟩
-  rw [toReduction, reductionMap]
+  rw [mvPolynomialToReduction, reductionMap]
   apply Ideal.Quotient.eq.2
   have hx : x = (integerEquiv σ k) F := by simp [F]
   have hdist' : dist (MvPolynomial.toTate p : TateAlgebra σ 𝒪[k]) F < 1 := by
     simpa [dist_comm] using hdist
   simpa [mem_topologicalNilradical_iff_norm_lt_one, hx, dist_eq_norm] using hdist'
 
-set_option backward.isDefEq.respectTransparency false in
-theorem toReduction_ker : RingHom.ker (toReduction σ k) = 𝓂[k].map MvPolynomial.C := by
+theorem mvPolynomialToReduction_ker :
+    RingHom.ker (mvPolynomialToReduction σ k) = 𝓂[k].map MvPolynomial.C := by
   ext p
   change ((Ideal.Quotient.mk (topNil k (TateAlgebra σ k))) ((integerEquiv σ k) p.toTate) = 0) ↔ _
   rw [Ideal.Quotient.eq_zero_iff_mem]
@@ -173,8 +191,9 @@ theorem toReduction_ker : RingHom.ker (toReduction σ k) = 𝓂[k].map MvPolynom
 
 noncomputable def reductionEquiv : MvPolynomial σ 𝓀[k] ≃+* Reduction k (TateAlgebra σ k) :=
   (MvPolynomial.quotientEquivQuotientMvPolynomial (σ := σ) 𝓂[k]).toRingEquiv.trans <|
-    (Ideal.quotEquivOfEq (toReduction_ker σ k).symm).trans <|
-      (toReduction σ k).quotientKerEquivOfSurjective (toReduction_surjective σ k)
+    (Ideal.quotEquivOfEq (mvPolynomialToReduction_ker σ k).symm).trans <|
+      (mvPolynomialToReduction σ k).quotientKerEquivOfSurjective
+        (mvPolynomialToReduction_surjective σ k)
 
 instance : IsNoetherianRing (Reduction k (TateAlgebra σ k)) :=
   isNoetherianRing_of_ringEquiv (MvPolynomial σ 𝓀[k]) (reductionEquiv σ k)

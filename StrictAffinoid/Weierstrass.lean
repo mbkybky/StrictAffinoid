@@ -11,9 +11,10 @@ public import Mathlib.RingTheory.AdjoinRoot
 public import Mathlib.RingTheory.MvPolynomial.IrreducibleQuadratic
 public import Mathlib.RingTheory.MvPowerSeries.Substitution
 public import Mathlib.RingTheory.PowerSeries.Basic
+public import StrictAffinoid.AlgebraResults
 public import StrictAffinoid.Basic
 
-public section
+@[expose] public section
 
 open MvPowerSeries TateAlgebra
 
@@ -42,8 +43,7 @@ structure IsWeierstrassPolynomial (w : TateAlgebra Unit A) (n : ℕ) : Prop wher
 
 omit [IsUltrametricDist A] [CompleteSpace A] in
 lemma norm_unit_mul_norm_inv_eq_one (u : Aˣ) : ‖(u : A)‖ * ‖((u⁻¹.1 : A))‖ = 1 := by
-  calc _ = ‖(u : A) * (u⁻¹.1 : A)‖ := by rw [norm_mul]
-    _ = 1 := by simp
+  rw [← norm_mul, Units.mul_inv, norm_one]
 
 omit [IsUltrametricDist A] [CompleteSpace A] in
 lemma norm_inv_unit_mul_norm_eq_one (u : Aˣ) :
@@ -130,9 +130,9 @@ omit [NormOneClass A] [NormMulClass A] [CompleteSpace A] in
 lemma exists_uniform_tail_bound (g : TateAlgebra Unit A) (m : ℕ)
     (htail : ∀ l > m, ‖PowerSeries.coeff l g.1‖ < 1) :
     ∃ ε : ℝ, 0 < ε ∧ ε < 1 ∧ ∀ l > m, ‖PowerSeries.coeff l g.1‖ ≤ ε := by
+  let hhp : 0 < (1 / 2 : ℝ) := by norm_num
   let t : Finset ℕ :=
-    ((finite_nat_coeff_set_of_isTate_unit g (ε := (1 / 2 : ℝ)) (by norm_num)).toFinset).filter
-      (fun l => m < l)
+    ((finite_nat_coeff_set_of_isTate_unit g hhp).toFinset).filter (fun l => m < l)
   let b : ℝ := if ht : t.Nonempty then t.sup' ht fun l => ‖PowerSeries.coeff l g.1‖ else 0
   let ε : ℝ := max (1 / 2 : ℝ) b
   refine ⟨ε, by positivity, ?_, ?_⟩
@@ -159,16 +159,9 @@ lemma exists_uniform_tail_bound (g : TateAlgebra Unit A) (m : ℕ)
       exact le_trans hle (le_max_right _ _)
     · have hsmall : ‖PowerSeries.coeff l g.1‖ < (1 / 2 : ℝ) := by
         by_contra hnot
-        have hhalf : (1 / 2 : ℝ) ≤ ‖PowerSeries.coeff l g.1‖ := le_of_not_gt hnot
-        have hmem_raw :
-            l ∈ (finite_nat_coeff_set_of_isTate_unit g (ε := (1 / 2 : ℝ)) (by norm_num)).toFinset :=
-              by
-          exact (Set.Finite.mem_toFinset
-            (finite_nat_coeff_set_of_isTate_unit g (ε := (1 / 2 : ℝ)) (by norm_num))).2 hhalf
-        have : l ∈ t := by
-          exact Finset.mem_filter.mpr ⟨hmem_raw, hl⟩
-        exact ht this
-      exact le_trans (le_of_lt hsmall) (le_max_left _ _)
+        exact ht <| Finset.mem_filter.mpr ⟨Set.Finite.mem_toFinset
+          (finite_nat_coeff_set_of_isTate_unit g hhp) |>.mpr (le_of_not_gt hnot), hl⟩
+      exact hsmall.le.trans (le_max_left _ b)
 
 /-- Embed a polynomial as the corresponding one-variable Tate series. -/
 noncomputable def polynomialToTate (p : Polynomial A) : TateAlgebra Unit A := by
@@ -339,11 +332,8 @@ lemma norm_divByMonic_le_and_norm_modByMonic_le
     simpa [r, hpdeg] using Polynomial.degree_modByMonic_lt h hpMonic
   have hEq : h = q * p + r := by
     dsimp [q, r]
-    calc
-      h = (h - p * (h.divByMonic p)) + p * (h.divByMonic p) := by ring
-      _ = h.divByMonic p * p + h.modByMonic p := by
-        rw [Polynomial.modByMonic_eq_sub_mul_div]
-        ring
+    rw [Polynomial.modByMonic_eq_sub_mul_div]
+    ring
   have hq_le : ‖polynomialToTate q‖ ≤ ‖polynomialToTate h‖ := by
     by_cases hq0 : q = 0
     · simp [q, hq0]
@@ -381,13 +371,8 @@ lemma norm_divByMonic_le_and_norm_modByMonic_le
           · have hjlt : j < n := lt_of_le_of_ne hjle hjeq
             have him : m < i := by omega
             have hqi : ‖q.coeff i‖ < ‖polynomialToTate q‖ := hmGt i him
-            calc
-              ‖q.coeff i * p.coeff j‖ = ‖q.coeff i‖ * ‖p.coeff j‖ := by rw [norm_mul]
-              _ ≤ ‖q.coeff i‖ * 1 := by
-                gcongr
-                exact hp_le j
-              _ = ‖q.coeff i‖ := by ring
-              _ < ‖polynomialToTate q‖ := hqi
+            rw [norm_mul]
+            exact (mul_le_mul_of_nonneg_left (hp_le j) (norm_nonneg _)).trans_lt (by simpa using hqi)
       have hcoeff_mul :
           ‖(q * p).coeff (m + n)‖ = ‖polynomialToTate q‖ := by
         have hmem : (m, n) ∈ Finset.antidiagonal (m + n) := by simp
@@ -436,12 +421,9 @@ lemma norm_divByMonic_le_and_norm_modByMonic_le
             rw [Polynomial.coeff_mul]
             refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg _) ?_
             rintro ⟨i, j⟩ hx
-            calc _ = ‖q.coeff i‖ * ‖p.coeff j‖ := by rw [norm_mul]
-              _ ≤ ‖polynomialToTate q‖ * 1 := by
-                gcongr
-                · exact polynomial_coeff_norm_le q i
-                · exact hp_le j
-              _ = ‖polynomialToTate q‖ := by ring
+            rw [norm_mul]
+            exact (mul_le_mul (polynomial_coeff_norm_le q i) (hp_le j) (norm_nonneg _)
+                (norm_nonneg _)).trans_eq (by simp)
           exact lt_of_le_of_lt hqpr_le (lt_of_not_ge hqr)
         have hcoeff_le : ‖polynomialToTate r‖ ≤ ‖polynomialToTate h‖ := by
           have hrcoeff : ‖h.coeff l‖ = ‖polynomialToTate r‖ := by
@@ -478,30 +460,25 @@ lemma exists_approx_division (g : TateAlgebra Unit A) {n : ℕ} {ε : ℝ} (hε0
     have hp0_coeff : ∀ i, p0.coeff i = if i ≤ n then PowerSeries.coeff i g.1 else 0 := by
       intro i
       by_cases hi : i ≤ n
-      · calc
-          _ = Finset.sum (Finset.range (n + 1))
-              (fun b => (Polynomial.monomial b (PowerSeries.coeff b g.1)).coeff i) := by
-            simp [p0]
-          _ = PowerSeries.coeff i g.1 := by
-            rw [Finset.sum_eq_single i]
-            simp
-            · intro b hb hbi
-              simp [Polynomial.coeff_monomial, hbi]
-            · intro hii
-              exact (hii (Finset.mem_range.mpr (Nat.lt_succ_of_le hi))).elim
-          _ = if i ≤ n then PowerSeries.coeff i g.1 else 0 := by simp [hi]
-      · calc
-          _ = Finset.sum (Finset.range (n + 1))
-              (fun b => (Polynomial.monomial b (PowerSeries.coeff b g.1)).coeff i) := by
-            simp [p0]
-          _ = 0 := by
-            apply Finset.sum_eq_zero
-            intro b hb
-            by_cases hbi : b = i
-            · exfalso
-              exact hi (hbi ▸ (Nat.lt_succ_iff.mp (Finset.mem_range.mp hb)))
-            · simp [Polynomial.coeff_monomial, hbi]
-          _ = if i ≤ n then PowerSeries.coeff i g.1 else 0 := by simp [hi]
+      · rw [show p0.coeff i = Finset.sum (Finset.range (n + 1)) (fun b =>
+          (Polynomial.monomial b (PowerSeries.coeff b g.1)).coeff i) by simp [p0]]
+        rw [Finset.sum_eq_single i]
+        · simp [hi]
+        · intro b _ hbi
+          simp [Polynomial.coeff_monomial, hbi]
+        · intro hii
+          exact (hii (Finset.mem_range.mpr (Nat.lt_succ_of_le hi))).elim
+      · rw [show p0.coeff i = Finset.sum (Finset.range (n + 1)) (fun b =>
+          (Polynomial.monomial b (PowerSeries.coeff b g.1)).coeff i) by simp [p0]]
+        have hzero : Finset.sum (Finset.range (n + 1))
+          (fun b => (Polynomial.monomial b (PowerSeries.coeff b g.1)).coeff i) = 0 := by
+          apply Finset.sum_eq_zero
+          intro b hb
+          by_cases hbi : b = i
+          · exfalso
+            exact hi (hbi ▸ (Nat.lt_succ_iff.mp (Finset.mem_range.mp hb)))
+          · simp [Polynomial.coeff_monomial, hbi]
+        simp [hzero, hi]
     have hp0₁ : p0.coeff n = 1 := by
       simp [hp0_coeff, hg₁]
     have hp0 : ∀ l > n, p0.coeff l = 0 := by
@@ -516,30 +493,27 @@ lemma exists_approx_division (g : TateAlgebra Unit A) {n : ℕ} {ε : ℝ} (hε0
       else 0 := by
       intro i
       by_cases hi : C ≤ ‖PowerSeries.coeff i h.1‖
-      · calc
-          _ = Finset.sum s (fun b => (Polynomial.monomial b (PowerSeries.coeff b h.1)).coeff i) :=
-            by simp [h0]
-          _ = PowerSeries.coeff i h.1 := by
-            rw [Finset.sum_eq_single i]
-            simp
-            · intro b hb hbi
-              simp [Polynomial.coeff_monomial, hbi]
-            · intro hii
-              exact (hii ((Set.Finite.mem_toFinset
-                (finite_nat_coeff_set_of_isTate_unit h hC0)).2 hi)).elim
-          _ = if C ≤ ‖PowerSeries.coeff i h.1‖ then PowerSeries.coeff i h.1 else 0 := by simp [hi]
-      · calc
-          _ = Finset.sum s (fun b => (Polynomial.monomial b (PowerSeries.coeff b h.1)).coeff i) :=
-            by simp [h0]
-          _ = 0 := by
-            apply Finset.sum_eq_zero
-            intro b hb
-            by_cases hbi : b = i
-            · exfalso
-              exact hi <| (Set.Finite.mem_toFinset (finite_nat_coeff_set_of_isTate_unit h hC0)).1
-                (hbi ▸ hb)
-            · simp [Polynomial.coeff_monomial, hbi]
-          _ = if C ≤ ‖PowerSeries.coeff i h.1‖ then PowerSeries.coeff i h.1 else 0 := by simp [hi]
+      · rw [show h0.coeff i = Finset.sum s (fun b =>
+          (Polynomial.monomial b (PowerSeries.coeff b h.1)).coeff i) by simp [h0]]
+        rw [Finset.sum_eq_single i]
+        · simp [hi]
+        · intro b _ hbi
+          simp [Polynomial.coeff_monomial, hbi]
+        · intro hii
+          exact (hii ((Set.Finite.mem_toFinset
+            (finite_nat_coeff_set_of_isTate_unit h hC0)).2 hi)).elim
+      · rw [show h0.coeff i = Finset.sum s (fun b =>
+          (Polynomial.monomial b (PowerSeries.coeff b h.1)).coeff i) by simp [h0]]
+        have hzero : Finset.sum s (fun b =>
+          (Polynomial.monomial b (PowerSeries.coeff b h.1)).coeff i) = 0 := by
+          apply Finset.sum_eq_zero
+          intro b hb
+          by_cases hbi : b = i
+          · exfalso
+            exact hi <| (Set.Finite.mem_toFinset (finite_nat_coeff_set_of_isTate_unit h hC0)).1
+              (hbi ▸ hb)
+          · simp [Polynomial.coeff_monomial, hbi]
+        simp [hzero, hi]
     have hh0_lt : ‖h - polynomialToTate h0‖ < C := by
       apply norm_lt_of_forall_coeff_lt
       intro i
@@ -560,12 +534,8 @@ lemma exists_approx_division (g : TateAlgebra Unit A) {n : ℕ} {ε : ℝ} (hε0
     have hp0Monic : p0.Monic := p0.monic_of_coeff_eq_one_of_high_zero n hp0₁ hp0
     have h10 : (1 : A) ≠ 0 := by
       intro h10
-      have hEq : (1 : ℝ) = 0 := by
-        calc
-          (1 : ℝ) = ‖(1 : A)‖ := by simp
-          _ = ‖(0 : A)‖ := by simp [h10]
-          _ = 0 := by simp
-      norm_num at hEq
+      have : (1 : ℝ) = 0 := by rw [← norm_one (α := A), h10, norm_zero]
+      norm_num at this
     letI : Nontrivial A := ⟨⟨0, 1, by simpa using h10.symm⟩⟩
     have hp0ne : p0 ≠ 0 := by
       intro hp0zero
@@ -597,28 +567,16 @@ lemma exists_approx_division (g : TateAlgebra Unit A) {n : ℕ} {ε : ℝ} (hε0
         rw [hcoeff]
         exact hgtail i hgt
     have hmul_err : ‖polynomialToTate q * (polynomialToTate p0 - g)‖ ≤ ε * ‖h‖ := by
-      calc
-        _ = ‖polynomialToTate q‖ * ‖polynomialToTate p0 - g‖ := by simp
-        _ = ‖polynomialToTate q‖ * ‖g - polynomialToTate p0‖ := by rw [norm_sub_rev]
-        _ ≤ ‖h‖ * ε := by gcongr
-        _ = ε * ‖h‖ := by ring
+      rw [show ‖polynomialToTate q * (polynomialToTate p0 - g)‖ =
+        ‖polynomialToTate q‖ * ‖g - polynomialToTate p0‖ by simp [norm_sub_rev]]
+      exact (mul_le_mul hqle (le_of_lt hgsub_lt) (norm_nonneg _) (norm_nonneg _)).trans_eq (mul_comm ‖h‖ ε)
     have hdiv_eq : polynomialToTate h0 = polynomialToTate q * polynomialToTate p0 + polynomialToTate
       r := by
       dsimp [q, r]
       have hpoly : h0 = h0.divByMonic p0 * p0 + h0.modByMonic p0 := by
-        calc
-          h0 = (h0 - p0 * (h0.divByMonic p0)) + p0 * (h0.divByMonic p0) := by ring
-          _ = h0.divByMonic p0 * p0 + h0.modByMonic p0 := by
-            rw [Polynomial.modByMonic_eq_sub_mul_div]
-            ring
-      calc
-        polynomialToTate h0 = polynomialToTate (h0.divByMonic p0 * p0 + h0.modByMonic p0) := by
-              exact congrArg polynomialToTate hpoly
-        _ = polynomialToTate (h0.divByMonic p0 * p0) + polynomialToTate (h0.modByMonic p0) := by
-              rw [polynomialToTate_add]
-        _ = polynomialToTate (h0.divByMonic p0) * polynomialToTate p0 + polynomialToTate
-          (h0.modByMonic p0) := by
-              rw [polynomialToTate_mul]
+        rw [Polynomial.modByMonic_eq_sub_mul_div]
+        ring
+      exact Eq.trans (congrArg polynomialToTate hpoly) (by simp)
     refine ⟨q, r, hrdeg, hqle, hrle, ?_⟩
     have hres_eq :
         h - (polynomialToTate q * g + polynomialToTate r) =
@@ -626,13 +584,7 @@ lemma exists_approx_division (g : TateAlgebra Unit A) {n : ℕ} {ε : ℝ} (hε0
       rw [hdiv_eq]
       ring
     rw [hres_eq]
-    calc
-      ‖h - polynomialToTate h0 + polynomialToTate q * (polynomialToTate p0 - g)‖
-          ≤ max ‖h - polynomialToTate h0‖ ‖polynomialToTate q * (polynomialToTate p0 - g)‖ :=
-            IsUltrametricDist.norm_add_le_max _ _
-      _ ≤ ε * ‖h‖ := by
-        refine max_le ?_ hmul_err
-        exact le_of_lt (by simpa [C] using hh0_lt)
+    exact (IsUltrametricDist.norm_add_le_max _ _).trans <| max_le (le_of_lt hh0_lt) hmul_err
 
 /-- Keep the coefficients of a one-variable Tate series up to degree `m`. -/
 noncomputable def truncPolynomial (g : TateAlgebra Unit A) (m : ℕ) :
@@ -691,13 +643,10 @@ lemma distinguished_division
     | zero =>
         simp [hseq_zero]
     | succ k ih =>
-        calc
-          _ ≤ ε * ‖hseq k‖ := by
-            simpa only [hseq_succ, qtail, rtail] using (hApprox_spec (hseq k)).2.2.2
-          _ ≤ ε * (‖h‖ * ε ^ k) := by gcongr
-          _ = ‖h‖ * ε ^ (k + 1) := by
-            rw [pow_succ]
-            ring
+        have h1 : ‖hseq (k + 1)‖ ≤ ε * ‖hseq k‖ :=
+          by simpa only [hseq_succ, qtail, rtail] using (hApprox_spec (hseq k)).2.2.2
+        exact h1.trans <|
+          (mul_le_mul_of_nonneg_left ih hεnonneg).trans_eq (by rw [pow_succ]; ring)
   have hqtail_le : ∀ k, ‖polynomialToTate (qtail k)‖ ≤ ‖h‖ * ε ^ k := by
     intro k
     exact le_trans (by simpa [qtail] using (hApprox_spec (hseq k)).2.1) (hhseq_le k)
@@ -827,14 +776,9 @@ lemma distinguished_division
       intro m
       refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg _) ?_
       intro k hk
-      calc
-        ‖PowerSeries.coeff l (polynomialToTate (qtail k)).1‖ ≤ ‖polynomialToTate (qtail k)‖ :=
-          TateAlgebra.coeff_norm_le (polynomialToTate (qtail k)) (Finsupp.single () l)
-        _ ≤ ‖h‖ * ε ^ k := hqtail_le k
-        _ ≤ ‖h‖ * 1 := by
-          gcongr
-          exact hpow_le_one k
-        _ = ‖h‖ := by ring
+      exact (TateAlgebra.coeff_norm_le (polynomialToTate (qtail k)) (Finsupp.single () l)).trans <|
+        (hqtail_le k).trans <|
+          (mul_le_mul_of_nonneg_left (hpow_le_one k) (norm_nonneg _)).trans_eq (by ring)
     have hclosed : IsClosed {a : A | ‖a‖ ≤ ‖h‖} := isClosed_le continuous_norm continuous_const
     have hmem : PowerSeries.coeff l q.1 ∈ {a : A | ‖a‖ ≤ ‖h‖} := by
       exact hclosed.mem_of_tendsto (hQcoeff_tend l) hcoeff_event
@@ -849,14 +793,9 @@ lemma distinguished_division
       intro m
       refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg _) ?_
       intro k hk
-      calc
-        _ ≤ ‖polynomialToTate (rtail k)‖ :=
-          TateAlgebra.coeff_norm_le (polynomialToTate (rtail k)) (Finsupp.single () l)
-        _ ≤ ‖h‖ * ε ^ k := hrtail_le k
-        _ ≤ ‖h‖ * 1 := by
-          gcongr
-          exact hpow_le_one k
-        _ = ‖h‖ := by ring
+      exact (TateAlgebra.coeff_norm_le (polynomialToTate (rtail k)) (Finsupp.single () l)).trans <|
+        (hrtail_le k).trans <|
+          (mul_le_mul_of_nonneg_left (hpow_le_one k) (norm_nonneg _)).trans_eq (by ring)
     have hclosed : IsClosed {a : A | ‖a‖ ≤ ‖h‖} := isClosed_le continuous_norm continuous_const
     have hmem : PowerSeries.coeff l Rtail.1 ∈ {a : A | ‖a‖ ≤ ‖h‖} := by
       exact hclosed.mem_of_tendsto (hRcoeff_tend l) hcoeff_event
@@ -1055,14 +994,9 @@ lemma division_injective
       · have hgj : ‖PowerSeries.coeff j g.1‖ < 1 := hgtail j hjgt
         have hqi_le : ‖PowerSeries.coeff i q.1‖ ≤ ‖q‖ :=
           TateAlgebra.coeff_norm_le q (Finsupp.single () i)
-        calc
-          ‖PowerSeries.coeff i q.1 * PowerSeries.coeff j g.1‖ =
-              ‖PowerSeries.coeff i q.1‖ * ‖PowerSeries.coeff j g.1‖ := by rw [norm_mul]
-          _ ≤ ‖q‖ * ‖PowerSeries.coeff j g.1‖ := by
-                gcongr
-          _ < ‖q‖ * 1 := by
-                exact mul_lt_mul_of_pos_left hgj hqnormpos
-          _ = ‖q‖ := by ring
+        rw [norm_mul]
+        exact (mul_le_mul_of_nonneg_right hqi_le (norm_nonneg _)).trans_lt <|
+          (mul_lt_mul_of_pos_left hgj hqnormpos).trans_eq (mul_one _)
       · have hjle : j ≤ n := Nat.le_of_not_gt hjgt
         by_cases hjeq : j = n
         · have hieq : i = m := by omega
@@ -1071,14 +1005,9 @@ lemma division_injective
         · have hjlt : j < n := lt_of_le_of_ne hjle hjeq
           have him : m < i := by omega
           have hqi : ‖PowerSeries.coeff i q.1‖ < ‖q‖ := hmGt i him
-          calc
-            ‖PowerSeries.coeff i q.1 * PowerSeries.coeff j g.1‖ =
-                ‖PowerSeries.coeff i q.1‖ * ‖PowerSeries.coeff j g.1‖ := by rw [norm_mul]
-            _ ≤ ‖PowerSeries.coeff i q.1‖ * 1 := by
-              gcongr
-              exact hg_le j
-            _ = ‖PowerSeries.coeff i q.1‖ := by ring
-            _ < ‖q‖ := hqi
+          rw [norm_mul]
+          exact (mul_le_mul_of_nonneg_left (hg_le j) (norm_nonneg _)).trans_lt <|
+            (by simpa using hqi)
     have hcoeff_mul : ‖PowerSeries.coeff (m + n) (q * g).1‖ = ‖q‖ := by
       have hmem : (m, n) ∈ Finset.antidiagonal (m + n) := by simp
       have hsplit :
@@ -1255,13 +1184,9 @@ lemma weierstrass_preparation_exists {f : TateAlgebra Unit A} {n : ℕ}
         have hr0_zero : r0.coeff i = 0 := Polynomial.coeff_eq_zero_of_degree_lt
           (lt_of_lt_of_le hr0deg (by exact_mod_cast Nat.le_of_lt higt))
         simp [Rpoly, hbase_zero, hr0_zero]
-      · calc
-          ‖Rpoly.coeff i‖ = ‖RbasePoly.coeff i + r0.coeff i‖ := by
-            simp [Rpoly, Polynomial.coeff_add]
-          _ ≤ max ‖RbasePoly.coeff i‖ ‖r0.coeff i‖ := IsUltrametricDist.norm_add_le_max _ _
-          _ ≤ 1 := by
-            refine max_le (hRbase_coeff_le i) ?_
-            exact le_of_lt (hr0_coeff_lt_one i)
+      · rw [show ‖Rpoly.coeff i‖ = ‖RbasePoly.coeff i + r0.coeff i‖ by simp [Rpoly]]
+        exact (IsUltrametricDist.norm_add_le_max _ _).trans <|
+          max_le (hRbase_coeff_le i) (le_of_lt (hr0_coeff_lt_one i))
   let wPoly : Polynomial A := Polynomial.X ^ n - Rpoly
   have hwcoeff_le : ∀ l, ‖wPoly.coeff l‖ ≤ 1 := by
     intro l
@@ -1291,28 +1216,19 @@ lemma weierstrass_preparation_exists {f : TateAlgebra Unit A} {n : ℕ}
       simp [wPoly, polynomialToTate, PowerSeries.coeff_X_pow, Nat.ne_of_gt hl, hRzero]
   have hXnEq : Xn = Q * g + polynomialToTate Rpoly := by
     have hp0_eq : polynomialToTate p0 = g + (q0 * g + polynomialToTate r0) := by
-      calc
-        polynomialToTate p0 = (polynomialToTate p0 - g) + g := by ring
-        _ = h0 + g := by rfl
-        _ = q0 * g + polynomialToTate r0 + g := by rw [h0eq]
-        _ = g + (q0 * g + polynomialToTate r0) := by ring
-    calc
-      Xn = polynomialToTate p0 + polynomialToTate RbasePoly := by
-            simp [Xn, RbasePoly, polynomialToTate_sub]
-      _ = g + (q0 * g + polynomialToTate r0) + polynomialToTate RbasePoly := by
-            rw [hp0_eq]
-      _ = (1 + q0) * g + (polynomialToTate RbasePoly + polynomialToTate r0) := by ring
-      _ = Q * g + polynomialToTate Rpoly := by
-            simp [Q, Rpoly, polynomialToTate_add, add_comm]
+      have : polynomialToTate p0 = (polynomialToTate p0 - g) + g := by ring
+      rw [this, show polynomialToTate p0 - g = h0 by rfl, h0eq]
+      ring
+    have h1 : Xn = polynomialToTate p0 + polynomialToTate RbasePoly := by
+      simp [Xn, RbasePoly, polynomialToTate_sub]
+    rw [h1, hp0_eq]
+    have h2 : g + (q0 * g + polynomialToTate r0) + polynomialToTate RbasePoly =
+        (1 + q0) * g + (polynomialToTate RbasePoly + polynomialToTate r0) := by ring
+    rw [h2]
+    simp [Q, Rpoly, polynomialToTate_add, add_comm]
   have hQg : Q * g = polynomialToTate wPoly := by
-    calc
-      Q * g = Xn - polynomialToTate Rpoly := by
-        rw [hXnEq]
-        ring
-      _ = polynomialToTate (Polynomial.X ^ n) - polynomialToTate Rpoly := by rfl
-      _ = polynomialToTate (Polynomial.X ^ n - Rpoly) := by
-        rw [← polynomialToTate_sub]
-      _ = polynomialToTate wPoly := by rfl
+    have h1 : Q * g = Xn - polynomialToTate Rpoly := by rw [hXnEq]; ring
+    exact Eq.trans h1 (by simp [wPoly, Xn, ← polynomialToTate_sub])
   rcases hQUnit with ⟨UQ, hUQ⟩
   let e : TateAlgebra Unit A := (algebraMap A (TateAlgebra Unit A) (u : A)) * UQ⁻¹.1
   have heUnit : IsUnit e := by
@@ -1321,25 +1237,15 @@ lemma weierstrass_preparation_exists {f : TateAlgebra Unit A} {n : ℕ}
   have hQgUQ : (UQ : TateAlgebra Unit A) * g = polynomialToTate wPoly := by
     simpa [Q, hUQ] using hQg
   have hgFact : g = UQ⁻¹.1 * polynomialToTate wPoly := by
-    calc
-      g = UQ⁻¹.1 * ((UQ : TateAlgebra Unit A) * g) := by simp
-      _ = UQ⁻¹.1 * polynomialToTate wPoly := by rw [hQgUQ]
+    exact (by simp : g = UQ⁻¹.1 * ((UQ : TateAlgebra Unit A) * g)).trans (by rw [hQgUQ])
   have hfFact : f = e * polynomialToTate wPoly := by
-    calc
-      f = (algebraMap A (TateAlgebra Unit A) (u : A)) * g := by
-            dsimp [g]
-            rw [Algebra.smul_def]
-            calc
-              f = (1 : TateAlgebra Unit A) * f := by simp
-              _ = (algebraMap A (TateAlgebra Unit A) ((u : A) * (u⁻¹.1 : A))) * f := by simp
-              _ = ((algebraMap A (TateAlgebra Unit A) (u : A)) *
-                    (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A))) * f := by
-                    rw [map_mul]
-              _ = (algebraMap A (TateAlgebra Unit A) (u : A)) *
-                    ((algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * f) := by ring
-      _ = (algebraMap A (TateAlgebra Unit A) (u : A)) * (UQ⁻¹.1 * polynomialToTate wPoly) := by
-            rw [hgFact]
-      _ = e * polynomialToTate wPoly := by simp [e, mul_assoc]
+    have h1 : f = (algebraMap A (TateAlgebra Unit A) (u : A)) * g := by
+      dsimp [g]; rw [Algebra.smul_def]
+      exact (by simp : f = (1 : TateAlgebra Unit A) * f).trans <|
+            (by simp : (1 : TateAlgebra Unit A) * f = (algebraMap A (TateAlgebra Unit A) ((u : A) * (u⁻¹.1 : A))) * f).trans <|
+            (by rw [map_mul] : (algebraMap A (TateAlgebra Unit A) ((u : A) * (u⁻¹.1 : A))) * f = ((algebraMap A (TateAlgebra Unit A) (u : A)) * (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A))) * f).trans <|
+            (by ring)
+    exact h1.trans <| (by rw [hgFact] : (algebraMap A (TateAlgebra Unit A) (u : A)) * g = (algebraMap A (TateAlgebra Unit A) (u : A)) * (UQ⁻¹.1 * polynomialToTate wPoly)).trans <| (by simp [e, mul_assoc])
   exact ⟨⟨polynomialToTate wPoly, e⟩, hwWeier, heUnit, hfFact⟩
 
 /-- ***Weierstrass Preparation theorem**: A distinguished series of order `n` factors uniquely as a
@@ -1409,20 +1315,15 @@ theorem weierstrass_preparation {f : TateAlgebra Unit A} {n : ℕ}
     rcases henUnit with ⟨Ue, hUe⟩
     refine ⟨Ue⁻¹.1, Polynomial.X ^ n - truncPolynomial w n, hrdeg, ?_, hwpoly_eq, rfl⟩
     have hgEq : g = (Ue : TateAlgebra Unit A) * w := by
-      calc
-        g = (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * f := by simp [g, Algebra.smul_def]
-        _ = (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * (e * w) := by rw [hfw]
-        _ = ((algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * e) * w := by ring
-        _ = (Ue : TateAlgebra Unit A) * w := by rw [hUe]
-    calc
-      Xn = polynomialToTate (truncPolynomial w n) + polynomialToTate (Polynomial.X ^ n -
-        truncPolynomial w n) := by
-            simp [Xn, polynomialToTate_sub]
-      _ = w + polynomialToTate (Polynomial.X ^ n - truncPolynomial w n) := by rw [hwpoly_eq]
-      _ = (Ue⁻¹.1 : TateAlgebra Unit A) * g + polynomialToTate (Polynomial.X ^ n - truncPolynomial w
-        n) := by
-            rw [hgEq]
-            simp
+      exact (by simp [g, Algebra.smul_def] : g = (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * f).trans <|
+        (by rw [hfw] : _ = (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * (e * w)).trans <|
+        (by ring : _ = ((algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * e) * w).trans <|
+        (by rw [hUe])
+    exact (by simp [Xn, polynomialToTate_sub] : Xn = polynomialToTate (truncPolynomial w n) + polynomialToTate (Polynomial.X ^ n - truncPolynomial w n)).trans <|
+      (by rw [hwpoly_eq] : _ = w + polynomialToTate (Polynomial.X ^ n - truncPolynomial w n)).trans <|
+      by
+        rw [hgEq]
+        simp
   refine ⟨we0, hwe0, ?_⟩
   intro we hwe
   rcases we0 with ⟨w0, e0⟩
@@ -1439,10 +1340,9 @@ theorem weierstrass_preparation {f : TateAlgebra Unit A} {n : ℕ}
     have := congrArg (fun p : Polynomial A => Polynomial.X ^ n - p) hsub
     simpa using this
   have hwEq : w0 = w1 := by
-    calc
-      w0 = polynomialToTate (truncPolynomial w0 n) := by simpa using hw0poly.symm
-      _ = polynomialToTate (truncPolynomial w1 n) := by rw [hwpolyEq]
-      _ = w1 := hw1poly
+    exact (by simpa using hw0poly.symm : w0 = polynomialToTate (truncPolynomial w0 n)).trans <|
+      (by rw [hwpolyEq] : _ = polynomialToTate (truncPolynomial w1 n)).trans <|
+      hw1poly
   have hw0_le : ∀ l, ‖PowerSeries.coeff l w0.1‖ ≤ 1 := by
     intro l
     exact le_trans (TateAlgebra.coeff_norm_le w0 (Finsupp.single () l)) hw0.norm_le_one
@@ -1451,17 +1351,11 @@ theorem weierstrass_preparation {f : TateAlgebra Unit A} {n : ℕ}
     simp [hw0.isPoly l hl]
   have heEq : e1 = e0 := by
     have hmulEq : e1 * w0 = e0 * w0 := by
-      calc
-        e1 * w0 = e1 * w1 := by rw [hwEq]
-        _ = f := hf1.symm
-        _ = e0 * w0 := hf0
+      exact (by rw [hwEq] : e1 * w0 = e1 * w1).trans <|
+        hf1.symm.trans hf0
     have hdiff : (e1 - e0) * w0 + polynomialToTate (0 : Polynomial A) = 0 := by
       have hmulZero : (e1 - e0) * w0 = 0 := by
-        calc
-          (e1 - e0) * w0 = e1 * w0 - e0 * w0 := by ring
-          _ = 0 := by
-            rw [hmulEq]
-            ring
+        exact (by ring : (e1 - e0) * w0 = e1 * w0 - e0 * w0).trans <| by rw [hmulEq]; ring
       simp [hmulZero]
     obtain ⟨hzero, _⟩ := division_injective w0 hw0.monic hw0_le hw0_tail (by simp) hdiff
     exact sub_eq_zero.mp hzero
@@ -1517,8 +1411,8 @@ theorem finite_quotient_of_isWeierstrassPolynomial {w : TateAlgebra Unit A} {n :
     change Ideal.Quotient.mk J w = Ideal.Quotient.mk J 0
     rw [Ideal.Quotient.eq]
     simpa using hwJ
-  have hIker : I ≤ RingHom.ker f.toRingHom := by
-    change Ideal.span ({p} : Set (Polynomial A)) ≤ RingHom.ker f.toRingHom
+  have hIker : I ≤ RingHom.ker f := by
+    change Ideal.span ({p} : Set (Polynomial A)) ≤ RingHom.ker f
     rw [Ideal.span_singleton_le_iff_mem]
     change f p = 0
     rw [show f p = (Ideal.Quotient.mkₐ A J) (polynomialToTate p) by rfl]
@@ -1540,7 +1434,7 @@ theorem finite_quotient_of_isWeierstrassPolynomial {w : TateAlgebra Unit A} {n :
       ring
     rw [hsub]
     exact J.neg_mem (J.mul_mem_left q hwJ)
-  have hψfinite : ψ.toRingHom.Finite := RingHom.Finite.of_surjective ψ.toRingHom hψsurj
+  have hψfinite : ψ.Finite := AlgHom.Finite.of_surjective ψ hψsurj
   have hIfinite₀ : Module.Finite A (Polynomial A ⧸ Ideal.span ({p} : Set (Polynomial A))) := by
     simpa using (Polynomial.Monic.finite_quotient hpMonic)
   have hIfinite : (algebraMap A (Polynomial A ⧸ I)).Finite := by
@@ -1558,18 +1452,18 @@ theorem finite_quotient_of_isWeierstrassPolynomial {w : TateAlgebra Unit A} {n :
 kernel of the corresponding homomorphism `A{T} → B` contains a Weierstrass polynomial.
 Then `B` is a finite `A`-algebra. -/
 theorem weierstrass_finiteness {B : Type*} [CommRing B] [Algebra A B]
-    {φ : TateAlgebra Unit A →ₐ[A] B} (hφ : φ.toRingHom.Finite) {w : TateAlgebra Unit A} {n : ℕ}
-    (hw : IsWeierstrassPolynomial w n) (hker : w ∈ RingHom.ker φ.toRingHom) :
+    {φ : TateAlgebra Unit A →ₐ[A] B} (hφ : φ.Finite) {w : TateAlgebra Unit A} {n : ℕ}
+    (hw : IsWeierstrassPolynomial w n) (hker : w ∈ RingHom.ker φ) :
     Module.Finite A B := by
   let I : Ideal (TateAlgebra Unit A) := Ideal.span {w}
-  have hIker : I ≤ RingHom.ker φ.toRingHom :=
-    (Ideal.span_singleton_le_iff_mem (RingHom.ker φ.toRingHom)).2 hker
+  have hIker : I ≤ RingHom.ker φ :=
+    (Ideal.span_singleton_le_iff_mem (RingHom.ker φ)).2 hker
   let ψ : ((TateAlgebra Unit A) ⧸ I) →ₐ[A] B := Ideal.Quotient.liftₐ I φ fun a ha => hIker ha
-  have hcomp : ψ.toRingHom.comp (Ideal.Quotient.mkₐ A I).toRingHom = φ.toRingHom := by
+  have hcomp : ψ.comp (Ideal.Quotient.mkₐ A I) = φ := by
     ext x
     simp [ψ, Ideal.Quotient.liftₐ_apply]
-  have hψ : ψ.toRingHom.Finite := by
-    have hφ' : (ψ.toRingHom.comp (Ideal.Quotient.mkₐ A I).toRingHom).Finite := by
+  have hψ : ψ.Finite := by
+    have hφ' : (ψ.comp (Ideal.Quotient.mkₐ A I)).Finite := by
       rw [hcomp]
       exact hφ
     exact RingHom.Finite.of_comp_finite hφ'
@@ -1578,8 +1472,7 @@ theorem weierstrass_finiteness {B : Type*} [CommRing B] [Algebra A B]
   have halg : ψ.toRingHom.comp (algebraMap A ((TateAlgebra Unit A) ⧸ I)) = algebraMap A B := by
     ext a
     simp [ψ]
-  simpa only [AlgHom.toRingHom_eq_coe, AlgHom.comp_algebraMap_of_tower,
-    RingHom.finite_algebraMap] using RingHom.Finite.comp hψ hI
+  simpa using RingHom.Finite.comp hψ hI
 
 end weierstrass_preparation
 
@@ -1882,19 +1775,10 @@ private lemma sum_antidiagonal_optionElim {τ β : Type*} [DecidableEq τ] [AddC
       ∑ x ∈ Finset.antidiagonal n,
         ∑ y ∈ Finset.antidiagonal d, F (Finsupp.optionElim x.1 y.1, Finsupp.optionElim x.2 y.2) :=
           by
-  calc
-    ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), F p =
-        ∑ p ∈ Finset.map (optionAntidiagonalEmbedding)
-            ((Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d), F p := by
-          rw [antidiagonal_optionElim_eq_map n d]
-    _ = ∑ z ∈ (Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d,
-          F (optionAntidiagonalEmbedding z) := by
-          rw [Finset.sum_map]
-    _ = ∑ x ∈ Finset.antidiagonal n,
-          ∑ y ∈ Finset.antidiagonal d, F (Finsupp.optionElim x.1 y.1, Finsupp.optionElim x.2 y.2) :=
-            by
-          rw [Finset.sum_sigma']
-          rfl
+  have h1 : ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), F p = ∑ p ∈ Finset.map (optionAntidiagonalEmbedding) ((Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d), F p := by rw [antidiagonal_optionElim_eq_map n d]
+  have h2 : ∑ p ∈ Finset.map (optionAntidiagonalEmbedding) ((Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d), F p = ∑ z ∈ (Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d, F (optionAntidiagonalEmbedding z) := by rw [Finset.sum_map]
+  have h3 : ∑ z ∈ (Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d, F (optionAntidiagonalEmbedding z) = ∑ x ∈ Finset.antidiagonal n, ∑ y ∈ Finset.antidiagonal d, F (Finsupp.optionElim x.1 y.1, Finsupp.optionElim x.2 y.2) := by rw [Finset.sum_sigma']; rfl
+  exact h1.trans (h2.trans h3)
 
 noncomputable instance {τ : Type*} : Algebra A (TateAlgebra Unit (TateAlgebra τ A)) :=
   ((algebraMap (TateAlgebra τ A) (TateAlgebra Unit (TateAlgebra τ A))).comp
@@ -1931,8 +1815,9 @@ lemma coeff_sum_optionCoeffTate_mul {τ : Type*}
       intro x hx
       simp [optionCoeffTate, MvPowerSeries.coeff_mul]
 
+variable (A) in
 /-- The algebra equivalence `A{Option τ} ≃ A{τ}{T}` splitting off `none`. -/
-noncomputable def optionToTateAlgEquiv {τ : Type*} :
+noncomputable def optionToTateAlgEquiv (τ : Type*) :
     TateAlgebra (Option τ) A ≃ₐ[A] TateAlgebra Unit (TateAlgebra τ A) where
   toFun := optionToTate
   invFun := tateToOption
@@ -1948,16 +1833,7 @@ noncomputable def optionToTateAlgEquiv {τ : Type*} :
     ext d
     simp [optionToTate, optionCoeffTate, coeff_optionToPowerSeries, PowerSeries.coeff_mul,
       MvPowerSeries.coeff_mul]
-    calc
-      ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), (coeff p.1) ↑f * (coeff p.2) ↑g =
-          ∑ x ∈ Finset.antidiagonal n,
-            ∑ y ∈ Finset.antidiagonal d,
-              MvPowerSeries.coeff (Finsupp.optionElim x.1 y.1) f.1 *
-                MvPowerSeries.coeff (Finsupp.optionElim x.2 y.2) g.1 := by
-        exact sum_antidiagonal_optionElim (τ := τ) n d
-          (fun p : (Option τ →₀ ℕ) × (Option τ →₀ ℕ) =>
-            MvPowerSeries.coeff p.1 f.1 * MvPowerSeries.coeff p.2 g.1)
-      _ = _ := (coeff_sum_optionCoeffTate_mul f g n d).symm
+    exact (by exact sum_antidiagonal_optionElim n d (fun p : ((Option τ →₀ ℕ) × (Option τ →₀ ℕ)) => MvPowerSeries.coeff p.1 f.1 * MvPowerSeries.coeff p.2 g.1) : ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), (coeff p.1) ↑f * (coeff p.2) ↑g = _).trans (coeff_sum_optionCoeffTate_mul f g n d).symm
   map_add' := by
     intro f g
     apply Subtype.ext
@@ -2230,7 +2106,7 @@ lemma tateMvPolynomialSubst_coe
         (φ.comp (IsScalarTower.toAlgHom A (TateAlgebra ι A) (MvPowerSeries ι A))) f :=
     RingHom.codRestrict_apply
       ((φ.comp (IsScalarTower.toAlgHom A (TateAlgebra ι A) (MvPowerSeries ι A))).toRingHom)
-      (tateSubalgebra τ A) hφ f
+        (tateSubalgebra τ A) hφ f
   rw [hcod]
   simpa [φ, aPS] using
     congrArg (MvPowerSeries.subst (fun i => (a i : MvPowerSeries τ A)))
@@ -2249,7 +2125,7 @@ lemma tateMvPolynomialSubst_X
   calc
     (((tateMvPolynomialSubst a ha0 ha1) (TateAlgebra.X i)) : MvPowerSeries τ A) =
         MvPowerSeries.subst aPS (MvPowerSeries.X i) := by
-      rw [tateMvPolynomialSubst_coe (A := A) a (ha0 := ha0) (ha1 := ha1)
+      rw [tateMvPolynomialSubst_coe a ha0 ha1
         (TateAlgebra.X i)]
       rfl
     _ = aPS i := (MvPowerSeries.subst_X haPS i)
@@ -2373,7 +2249,7 @@ lemma isContractiveHom_tateMvPolynomialSubst
     (ha1 : ∀ i,
       ‖(((a i).toTate) :
           TateAlgebra τ A)‖ ≤ 1) :
-    IsContractiveHom (tateMvPolynomialSubst a ha0 ha1).toRingHom := by
+    IsContractiveHom (tateMvPolynomialSubst a ha0 ha1) := by
   intro f
   change ‖tateMvPolynomialSubst a ha0 ha1 f‖ ≤ ‖f‖
   by_cases hzero : tateMvPolynomialSubst a ha0 ha1 f = 0
@@ -2486,14 +2362,14 @@ lemma optionWeight_optionDigitWeight_injective {n B : ℕ} (hB : 1 < B)
 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] [NormOneClass A] [NormMulClass A] in
 lemma optionEquivLeft_optionTriangularForwardPoly_none (d : τ → ℕ) :
-    (MvPolynomial.optionEquivLeft A τ) (optionTriangularForwardPoly (A := A) d none) =
+    (MvPolynomial.optionEquivLeft A τ) (optionTriangularForwardPoly A d none) =
       Polynomial.X := by
   simp [optionTriangularForwardPoly, MvPolynomial.optionEquivLeft_X_none]
 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] in
 omit [NormOneClass A] [NormMulClass A] in
 lemma optionEquivLeft_optionTriangularForwardPoly_some (d : τ → ℕ) (t : τ) :
-    (MvPolynomial.optionEquivLeft A τ) (optionTriangularForwardPoly (A := A) d (some t)) =
+    (MvPolynomial.optionEquivLeft A τ) (optionTriangularForwardPoly A d (some t)) =
       Polynomial.C (MvPolynomial.X t) + Polynomial.X ^ d t := by
   simp [optionTriangularForwardPoly, MvPolynomial.optionEquivLeft_X_some,
     MvPolynomial.optionEquivLeft_X_none]
@@ -2504,10 +2380,10 @@ lemma coeff_constantCoeff_optionEquivLeft_monomial (d : τ → ℕ)
     MvPolynomial.constantCoeff
       (((MvPolynomial.optionEquivLeft A τ)
         (MvPolynomial.monomial e (1 : A) |>
-          MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d))).coeff n) =
+          MvPolynomial.aeval (optionTriangularForwardPoly A d))).coeff n) =
       if n = optionWeight d e then 1 else 0 := by
   let p : MvPolynomial (Option τ) A :=
-    (MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d))
+    (MvPolynomial.aeval (optionTriangularForwardPoly A d))
       (MvPolynomial.monomial e (1 : A))
   have hpow (t : τ) :
       Polynomial.map (MvPolynomial.constantCoeff : MvPolynomial τ A →+* A)
@@ -2526,7 +2402,7 @@ lemma coeff_constantCoeff_optionEquivLeft_monomial (d : τ → ℕ)
       Polynomial.map MvPolynomial.constantCoeff
           ((MvPolynomial.optionEquivLeft A τ)
             (algebraMap A (MvPolynomial (Option τ) A) 1 *
-              e.prod fun i m => optionTriangularForwardPoly (A := A) d i ^ m))
+              e.prod fun i m => optionTriangularForwardPoly A d i ^ m))
           =
           Polynomial.X ^ e none *
             Polynomial.map MvPolynomial.constantCoeff
@@ -2571,11 +2447,11 @@ lemma coeff_constantCoeff_optionEquivLeft_monomial' (d : τ → ℕ)
     MvPolynomial.constantCoeff
       (((MvPolynomial.optionEquivLeft A τ)
         (MvPolynomial.monomial e a |>
-          MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d))).coeff n) =
+          MvPolynomial.aeval (optionTriangularForwardPoly A d))).coeff n) =
       if n = optionWeight d e then a else 0 := by
   rw [monomial_eq_smul_monomial_one]
   simp only [map_smul, Polynomial.coeff_smul, MvPolynomial.constantCoeff_smul]
-  rw [coeff_constantCoeff_optionEquivLeft_monomial (A := A) d e n]
+  rw [coeff_constantCoeff_optionEquivLeft_monomial d e n]
   split_ifs with h
   · simp
   · simp
@@ -2586,19 +2462,19 @@ lemma coeff_constantCoeff_optionEquivLeft_sum_monomial (d : τ → ℕ)
     MvPolynomial.constantCoeff
       (((MvPolynomial.optionEquivLeft A τ)
         ((Finset.sum s fun e => MvPolynomial.monomial e (c e)) |>
-          MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d))).coeff n) =
+          MvPolynomial.aeval (optionTriangularForwardPoly A d))).coeff n) =
       Finset.sum s fun e => if n = optionWeight d e then c e else 0 := by
   induction s using Finset.induction_on with
   | empty => simp
   | @insert a s ha ih =>
       rw [Finset.sum_insert ha, Finset.sum_insert ha]
       simp only [map_add, Polynomial.coeff_add]
-      rw [coeff_constantCoeff_optionEquivLeft_monomial' (A := A) d a (c a) n]
+      rw [coeff_constantCoeff_optionEquivLeft_monomial' d a (c a) n]
       congr 1
 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] [NormOneClass A] [NormMulClass A] in
 lemma optionTriangularForwardPoly_constantCoeff (d : τ → ℕ) (hd : ∀ t, 0 < d t) (i : Option τ) :
-    MvPolynomial.constantCoeff (optionTriangularForwardPoly (A := A) d i) = 0 := by
+    MvPolynomial.constantCoeff (optionTriangularForwardPoly A d i) = 0 := by
   classical
   cases i with
   | none =>
@@ -2614,7 +2490,7 @@ lemma optionTriangularForwardPoly_constantCoeff (d : τ → ℕ) (hd : ∀ t, 0 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] in
 omit [NormOneClass A] [NormMulClass A] in
 lemma optionTriangularInversePoly_constantCoeff (d : τ → ℕ) (hd : ∀ t, 0 < d t) (i : Option τ) :
-    MvPolynomial.constantCoeff (optionTriangularInversePoly (A := A) d i) = 0 := by
+    MvPolynomial.constantCoeff (optionTriangularInversePoly A d i) = 0 := by
   classical
   cases i with
   | none =>
@@ -2629,7 +2505,7 @@ lemma optionTriangularInversePoly_constantCoeff (d : τ → ℕ) (hd : ∀ t, 0 
 
 omit [NormMulClass A] [CompleteSpace A] [Fintype τ] in
 lemma optionTriangularForwardPoly_norm_le_one (d : τ → ℕ) :
-    ∀ i, ‖((optionTriangularForwardPoly (A := A) d i).toTate :
+    ∀ i, ‖((optionTriangularForwardPoly A d i).toTate :
       TateAlgebra (Option τ) A)‖ ≤ 1 := by
   intro i
   cases i with
@@ -2660,7 +2536,7 @@ lemma optionTriangularForwardPoly_norm_le_one (d : τ → ℕ) :
 
 omit [NormMulClass A] [CompleteSpace A] [Fintype τ] in
 lemma optionTriangularInversePoly_norm_le_one (d : τ → ℕ) :
-    ∀ i, ‖((optionTriangularInversePoly (A := A) d i).toTate :
+    ∀ i, ‖((optionTriangularInversePoly A d i).toTate :
       TateAlgebra (Option τ) A)‖ ≤ 1 := by
   intro i
   cases i with
@@ -2686,66 +2562,64 @@ lemma optionTriangularInversePoly_norm_le_one (d : τ → ℕ) :
 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] in
 omit [NormOneClass A] [NormMulClass A] in
-lemma optionTriangularForward_comp_inverse_eval (d : τ → ℕ) :
-    ∀ i,
-      MvPolynomial.aeval (optionTriangularInversePoly (A := A) d)
-        (optionTriangularForwardPoly (A := A) d i) = MvPolynomial.X i := by
-  intro i
+lemma optionTriangularForward_comp_inverse_eval (d : τ → ℕ) (i : Option τ) :
+      MvPolynomial.aeval (optionTriangularInversePoly A d)
+        (optionTriangularForwardPoly A d i) = MvPolynomial.X i := by
   cases i with
   | none => simp [optionTriangularForwardPoly, optionTriangularInversePoly]
   | some t => simp [optionTriangularForwardPoly, optionTriangularInversePoly]
 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] in
 omit [NormOneClass A] [NormMulClass A] in
-lemma optionTriangularInverse_comp_forward_eval (d : τ → ℕ) :
-    ∀ i,
-      MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d)
-        (optionTriangularInversePoly (A := A) d i) = MvPolynomial.X i := by
-  intro i
+lemma optionTriangularInverse_comp_forward_eval (d : τ → ℕ) (i : Option τ) :
+      MvPolynomial.aeval (optionTriangularForwardPoly A d)
+        (optionTriangularInversePoly A d i) = MvPolynomial.X i := by
   cases i with
   | none => simp [optionTriangularForwardPoly, optionTriangularInversePoly]
   | some t => simp [optionTriangularForwardPoly, optionTriangularInversePoly]
 
+variable (A) in
 /-- The Tate algebra endomorphism induced by the forward triangular coordinate change. -/
 noncomputable def optionTriangularForward (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
     TateAlgebra (Option τ) A →ₐ[A] TateAlgebra (Option τ) A :=
-  tateMvPolynomialSubst (A := A) (optionTriangularForwardPoly (A := A) d)
-    (optionTriangularForwardPoly_constantCoeff (A := A) d hd)
-    (optionTriangularForwardPoly_norm_le_one (A := A) d)
+  tateMvPolynomialSubst (optionTriangularForwardPoly A d)
+    (optionTriangularForwardPoly_constantCoeff d hd)
+    (optionTriangularForwardPoly_norm_le_one d)
 
+variable (A) in
 /-- The Tate algebra endomorphism induced by the inverse triangular coordinate change. -/
 noncomputable def optionTriangularInverse (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
     TateAlgebra (Option τ) A →ₐ[A] TateAlgebra (Option τ) A :=
-  tateMvPolynomialSubst (A := A) (optionTriangularInversePoly (A := A) d)
-    (optionTriangularInversePoly_constantCoeff (A := A) d hd)
-    (optionTriangularInversePoly_norm_le_one (A := A) d)
+  tateMvPolynomialSubst (optionTriangularInversePoly A d)
+    (optionTriangularInversePoly_constantCoeff d hd)
+    (optionTriangularInversePoly_norm_le_one d)
 
 omit [CompleteSpace A] in
 lemma isContractiveHom_optionTriangularForward (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
-    IsContractiveHom (optionTriangularForward (A := A) d hd).toRingHom := by
+    IsContractiveHom (optionTriangularForward A d hd) := by
   simpa [optionTriangularForward] using
-    isContractiveHom_tateMvPolynomialSubst (A := A)
-      (optionTriangularForwardPoly (A := A) d)
-      (ha0 := optionTriangularForwardPoly_constantCoeff (A := A) d hd)
-      (ha1 := optionTriangularForwardPoly_norm_le_one (A := A) d)
+    isContractiveHom_tateMvPolynomialSubst
+      (optionTriangularForwardPoly A d)
+      (ha0 := optionTriangularForwardPoly_constantCoeff d hd)
+      (ha1 := optionTriangularForwardPoly_norm_le_one d)
 
 omit [CompleteSpace A] in
 lemma isContractiveHom_optionTriangularInverse (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
-    IsContractiveHom (optionTriangularInverse (A := A) d hd).toRingHom := by
+    IsContractiveHom (optionTriangularInverse A d hd) := by
   simpa [optionTriangularInverse] using
-    isContractiveHom_tateMvPolynomialSubst (A := A)
-      (optionTriangularInversePoly (A := A) d)
-      (ha0 := optionTriangularInversePoly_constantCoeff (A := A) d hd)
-      (ha1 := optionTriangularInversePoly_norm_le_one (A := A) d)
+    isContractiveHom_tateMvPolynomialSubst
+      (optionTriangularInversePoly A d)
+      (ha0 := optionTriangularInversePoly_constantCoeff d hd)
+      (ha1 := optionTriangularInversePoly_norm_le_one d)
 
 omit [CompleteSpace A] in
 lemma optionTriangularForward_comp_inverse (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
-    (optionTriangularForward (A := A) d hd).comp (optionTriangularInverse (A := A) d hd) =
+    (optionTriangularForward A d hd).comp (optionTriangularInverse A d hd) =
       AlgHom.id A (TateAlgebra (Option τ) A) := by
   let c : Option τ → MvPolynomial (Option τ) A := fun i => MvPolynomial.X i
   have hc : ∀ i,
-      c i = MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d)
-        (optionTriangularInversePoly (A := A) d i) := by
+      c i = MvPolynomial.aeval (optionTriangularForwardPoly A d)
+        (optionTriangularInversePoly A d i) := by
     intro i
     symm
     simpa [c] using optionTriangularInverse_comp_forward_eval d i
@@ -2757,14 +2631,10 @@ lemma optionTriangularForward_comp_inverse (d : τ → ℕ) (hd : ∀ t, 0 < d t
     simpa [c, toTate_option_X] using
       (TateAlgebra.norm_X_le_one i)
   rw [optionTriangularForward, optionTriangularInverse]
-  rw [tateMvPolynomialSubst_comp (A := A)
-    (optionTriangularInversePoly (A := A) d)
-    (ha0 := optionTriangularInversePoly_constantCoeff (A := A) d hd)
-    (ha1 := optionTriangularInversePoly_norm_le_one (A := A) d)
-    (optionTriangularForwardPoly (A := A) d)
-    (hb0 := optionTriangularForwardPoly_constantCoeff (A := A) d hd)
-    (hb1 := optionTriangularForwardPoly_norm_le_one (A := A) d)
-    c hc hc0 hc1]
+  rw [tateMvPolynomialSubst_comp (optionTriangularInversePoly A d)
+    (optionTriangularInversePoly_constantCoeff d hd) (optionTriangularInversePoly_norm_le_one d)
+    (optionTriangularForwardPoly A d) (optionTriangularForwardPoly_constantCoeff d hd)
+    (optionTriangularForwardPoly_norm_le_one d) c hc hc0 hc1]
   apply DFunLike.ext
   intro x
   apply Subtype.ext
@@ -2772,17 +2642,17 @@ lemma optionTriangularForward_comp_inverse (d : τ → ℕ) (hd : ∀ t, 0 < d t
     _ = MvPowerSeries.subst (fun i : Option τ => MvPowerSeries.X i)
         ((x : TateAlgebra (Option τ) A) : MvPowerSeries (Option τ) A) := by
       simp [c]
-    _ = _ := (congrArg (fun f => f ((x : TateAlgebra (Option τ) A) : MvPowerSeries (Option τ) A))
-      (MvPowerSeries.subst_self (σ := Option τ)))
+    _ = _ := congrArg (fun f => f ((x : TateAlgebra (Option τ) A) : MvPowerSeries (Option τ) A))
+      MvPowerSeries.subst_self
 
 omit [CompleteSpace A] in
 lemma optionTriangularInverse_comp_forward (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
-    (optionTriangularInverse (A := A) d hd).comp (optionTriangularForward (A := A) d hd) =
+    (optionTriangularInverse A d hd).comp (optionTriangularForward A d hd) =
       AlgHom.id A (TateAlgebra (Option τ) A) := by
   let c : Option τ → MvPolynomial (Option τ) A := fun i => MvPolynomial.X i
   have hc : ∀ i,
-      c i = MvPolynomial.aeval (optionTriangularInversePoly (A := A) d)
-        (optionTriangularForwardPoly (A := A) d i) := by
+      c i = MvPolynomial.aeval (optionTriangularInversePoly A d)
+        (optionTriangularForwardPoly A d i) := by
     intro i
     symm
     simpa [c] using optionTriangularForward_comp_inverse_eval d i
@@ -2794,18 +2664,14 @@ lemma optionTriangularInverse_comp_forward (d : τ → ℕ) (hd : ∀ t, 0 < d t
     simpa [c, toTate_option_X] using
       (TateAlgebra.norm_X_le_one i)
   rw [optionTriangularInverse, optionTriangularForward]
-  rw [tateMvPolynomialSubst_comp (A := A)
-    (optionTriangularForwardPoly (A := A) d)
-    (ha0 := optionTriangularForwardPoly_constantCoeff (A := A) d hd)
-    (ha1 := optionTriangularForwardPoly_norm_le_one (A := A) d)
-    (optionTriangularInversePoly (A := A) d)
-    (hb0 := optionTriangularInversePoly_constantCoeff (A := A) d hd)
-    (hb1 := optionTriangularInversePoly_norm_le_one (A := A) d)
-    c hc hc0 hc1]
+  rw [tateMvPolynomialSubst_comp (optionTriangularForwardPoly A d)
+    (optionTriangularForwardPoly_constantCoeff d hd) (optionTriangularForwardPoly_norm_le_one d)
+    (optionTriangularInversePoly A d) (optionTriangularInversePoly_constantCoeff d hd)
+    (optionTriangularInversePoly_norm_le_one d) c hc hc0 hc1]
   apply DFunLike.ext
   intro x
   apply Subtype.ext
-  simpa [c] using congrArg (fun f => f x.1) (MvPowerSeries.subst_self (σ := Option τ))
+  simpa [c] using congrArg (fun f => f x.1) MvPowerSeries.subst_self
 
 end TriangularAutomorphism
 
@@ -2907,24 +2773,24 @@ omit [NormOneClass A] [NormMulClass A] [CompleteSpace A] [IsUltrametricDist A] i
 lemma optionTriangularForwardPoly_isWeightedHomogeneous {n : ℕ} (d : Fin n → ℕ) :
     let w : Option (Fin n) → ℕ := fun o => o.elim 1 d
     ∀ i, MvPolynomial.IsWeightedHomogeneous w
-      (optionTriangularForwardPoly (A := A) d i) (w i) := by
+      (optionTriangularForwardPoly A d i) (w i) := by
   intro w i
   cases i with
   | none =>
       simpa [optionTriangularForwardPoly] using
-        (MvPolynomial.isWeightedHomogeneous_X (R := A) w (none : Option (Fin n)))
+        (MvPolynomial.isWeightedHomogeneous_X A w (none : Option (Fin n)))
   | some t =>
-      refine (MvPolynomial.isWeightedHomogeneous_X (R := A) w (some t)).add ?_
+      refine (MvPolynomial.isWeightedHomogeneous_X A w (some t)).add ?_
       simpa [w] using
         (MvPolynomial.IsWeightedHomogeneous.pow
-          (MvPolynomial.isWeightedHomogeneous_X (R := A) w (none : Option (Fin n))) (d t))
+          (MvPolynomial.isWeightedHomogeneous_X A w (none : Option (Fin n))) (d t))
 
 omit [NormOneClass A] [NormMulClass A] [CompleteSpace A] [IsUltrametricDist A] in
 lemma aeval_optionTriangularForwardPoly_monomial_isWeightedHomogeneous {n : ℕ}
     (d : Fin n → ℕ) (e : Option (Fin n) →₀ ℕ) (a : A) :
     let w : Option (Fin n) → ℕ := fun o => o.elim 1 d
     MvPolynomial.IsWeightedHomogeneous w
-      ((MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d)) (MvPolynomial.monomial e a))
+      ((MvPolynomial.aeval (optionTriangularForwardPoly A d)) (MvPolynomial.monomial e a))
       (optionWeight d e) := by
   intro w
   rw [MvPolynomial.aeval_monomial]
@@ -2932,7 +2798,7 @@ lemma aeval_optionTriangularForwardPoly_monomial_isWeightedHomogeneous {n : ℕ}
       (MvPolynomial.C a : MvPolynomial (Option (Fin n)) A) 0 :=
     MvPolynomial.isWeightedHomogeneous_C w a
   have hprod := MvPolynomial.IsWeightedHomogeneous.prod e.support
-    (fun i => optionTriangularForwardPoly (A := A) d i ^ e i)
+    (fun i => optionTriangularForwardPoly A d i ^ e i)
     (fun i => e i • w i) (by
       intro i hi
       exact (optionTriangularForwardPoly_isWeightedHomogeneous d i).pow (e i))
@@ -2957,15 +2823,15 @@ lemma lt_optionWeight_optionElim {n : ℕ} (d : Fin n → ℕ) (hd : ∀ t, 0 < 
 omit [CompleteSpace A] in
 lemma optionTriangularForward_apply_toTate {n : ℕ} (d : Fin n → ℕ)
     (hd : ∀ t, 0 < d t) (p : MvPolynomial (Option (Fin n)) A) :
-    optionTriangularForward d hd p.toTate =
-      ((MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d) p).toTate) := by
+    optionTriangularForward A d hd p.toTate =
+      ((MvPolynomial.aeval (optionTriangularForwardPoly A d) p).toTate) := by
   let Φ₁ : MvPolynomial (Option (Fin n)) A →ₐ[A] TateAlgebra (Option (Fin n)) A :=
-    (optionTriangularForward d hd).comp
+    (optionTriangularForward A d hd).comp
       (MvPolynomial.toTate : MvPolynomial (Option (Fin n)) A →ₐ[A] TateAlgebra (Option (Fin n)) A)
   let Φ₂ : MvPolynomial (Option (Fin n)) A →ₐ[A] TateAlgebra (Option (Fin n)) A :=
     (MvPolynomial.toTate : MvPolynomial (Option (Fin n)) A →ₐ[A]
       TateAlgebra (Option (Fin n)) A).comp
-      (MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d))
+      (MvPolynomial.aeval (optionTriangularForwardPoly A d))
   have hΦ : Φ₁ = Φ₂ := by
     apply MvPolynomial.algHom_ext
     intro i
@@ -3004,7 +2870,7 @@ lemma coeff_aeval_optionTriangularForwardPoly_monomial_eq_zero_of_weight_ne {n :
     (d : Fin n → ℕ) (e : Option (Fin n) →₀ ℕ) (a : A) (l : ℕ) (d₀ : Fin n →₀ ℕ)
     (hne : optionWeight d (Finsupp.optionElim l d₀) ≠ optionWeight d e) :
     MvPolynomial.coeff (Finsupp.optionElim l d₀)
-      ((MvPolynomial.aeval (optionTriangularForwardPoly (A := A) d)) (MvPolynomial.monomial e a)) =
+      ((MvPolynomial.aeval (optionTriangularForwardPoly A d)) (MvPolynomial.monomial e a)) =
         0 := by
   let w : Option (Fin n) → ℕ := fun o => o.elim 1 d
   have hwh := aeval_optionTriangularForwardPoly_monomial_isWeightedHomogeneous
@@ -3023,7 +2889,7 @@ lemma exists_optionDigitWeight_bound {n : ℕ} (s : Finset (Option (Fin n) →�
       exact Finset.le_sup (by simp)
     have hs : Finset.univ.sup (fun j : Option (Fin n) => e j) ≤
         s.sup (fun e => Finset.univ.sup fun j : Option (Fin n) => e j) := by
-      exact Finset.le_sup (s := s)
+      exact Finset.le_sup
         (f := fun e : Option (Fin n) →₀ ℕ => Finset.univ.sup fun j : Option (Fin n) => e j) he
     omega
 
@@ -3115,7 +2981,7 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
     (f : TateAlgebra (Option (Fin n)) k) (hf : f ≠ 0) (hnorm : ‖f‖ = 1) :
     ∃ (d : Fin n → ℕ) (hd : ∀ t, 0 < d t) (m : ℕ),
       TateAlgebra.IsDistinguishedOfOrder
-        (optionToTate (optionTriangularForward d hd f)) m := by
+        (optionToTate (optionTriangularForward k d hd f)) m := by
   let s : Finset (Option (Fin n) →₀ ℕ) :=
     (finite_set_coeff_norm_eq_norm f hf).toFinset
   have hs : ∀ e, e ∈ s ↔ ‖MvPowerSeries.coeff e f.1‖ = 1 := by
@@ -3148,14 +3014,10 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
     exact Finset.le_max' wset (optionWeight d e) (Finset.mem_image.mpr ⟨e, he, rfl⟩)
   let p : MvPolynomial (Option (Fin n)) k :=
     ∑ e ∈ s, MvPolynomial.monomial e (MvPowerSeries.coeff e f.1)
-  have hcoeff_le : ∀ e, ‖MvPowerSeries.coeff e f.1‖ ≤ 1 := by
-    intro e
+  have hcoeff_le (e) : ‖MvPowerSeries.coeff e f.1‖ ≤ 1 := by
     simpa [hnorm] using TateAlgebra.coeff_norm_le f e
-  have hr_coeff_lt :
-      ∀ e,
-        ‖MvPowerSeries.coeff e
-            (f - p.toTate).1‖ < 1 := by
-    refine coeff_sub_toTate_maxNorm_lt_one (A := k) f s ?_ hcoeff_le
+  have hr_coeff_lt : ∀ e, ‖MvPowerSeries.coeff e (f - p.toTate).1‖ < 1 := by
+    refine coeff_sub_toTate_maxNorm_lt_one f s ?_ hcoeff_le
     intro e
     simpa [p, Finset.sum_sigma'] using hs e
   have hr_norm_lt : ‖f - p.toTate‖ < 1 := by
@@ -3166,22 +3028,22 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
       linarith
     · obtain ⟨e, he⟩ := TateAlgebra.exists_coeff_norm_eq_norm (f - p.toTate) hf0
       exact (not_lt_of_ge (hge.trans_eq he.symm)) (hr_coeff_lt e)
-  let g : TateAlgebra (Option (Fin n)) k := optionTriangularForward d hd f
+  let g : TateAlgebra (Option (Fin n)) k := optionTriangularForward k d hd f
   let gp : TateAlgebra (Option (Fin n)) k :=
-    optionTriangularForward d hd p.toTate
+    optionTriangularForward k d hd p.toTate
   let gr : TateAlgebra (Option (Fin n)) k :=
-    optionTriangularForward d hd (f - p.toTate)
+    optionTriangularForward k d hd (f - p.toTate)
   have hg_split : g = gp + gr := by
     simp [g, gp, gr, sub_eq_add_neg, add_left_comm, add_comm]
   have hgr_norm_lt : ‖gr‖ < 1 :=
     lt_of_le_of_lt ((isContractiveHom_optionTriangularForward d hd) _) hr_norm_lt
   have hgp_eq :
       gp =
-        ((MvPolynomial.aeval (optionTriangularForwardPoly (A := k) d) p).toTate) := by
+        ((MvPolynomial.aeval (optionTriangularForwardPoly k d) p).toTate) := by
     simpa [gp] using optionTriangularForward_apply_toTate d hd p
   let h : TateAlgebra Unit (TateAlgebra (Fin n) k) := optionToTate g
   let p' : MvPolynomial (Option (Fin n)) k :=
-    (MvPolynomial.aeval (optionTriangularForwardPoly (A := k) d)) p
+    (MvPolynomial.aeval (optionTriangularForwardPoly k d)) p
   have hp'_coeff_zero_of_gt :
       ∀ {l : ℕ} {d₀ : Fin n →₀ ℕ},
         m < optionWeight d (Finsupp.optionElim l d₀) →
@@ -3205,7 +3067,7 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
             (fun e => if m = optionWeight d e then MvPowerSeries.coeff e f.1 else 0) := by
       simpa [p', p] using
         (coeff_constantCoeff_optionEquivLeft_sum_monomial
-          (A := k) d s (fun e => MvPowerSeries.coeff e f.1) m)
+          d s (fun e => MvPowerSeries.coeff e f.1) m)
     rw [hsum]
     have hsum' :
         Finset.sum s
@@ -3213,7 +3075,7 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
               if m = optionWeight d e then (MvPowerSeries.coeff e f.1 : k) else (0 : k)) =
           MvPowerSeries.coeff e₀ f.1 := by
       simpa [hm] using
-        (Finset.sum_eq_single (s := s)
+        (Finset.sum_eq_single
           (f := fun e : Option (Fin n) →₀ ℕ =>
             if m = optionWeight d e then (MvPowerSeries.coeff e f.1 : k) else (0 : k))
           e₀
@@ -3223,8 +3085,7 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
               intro hEq
               have : e = e₀ := hs_inj he he₀s (by simpa [hm] using hEq)
               exact hes this
-            have hne' : m ≠ optionWeight d e := by
-              simpa [eq_comm] using hne
+            have hne' : m ≠ optionWeight d e := by simpa [eq_comm] using hne
             simp [hne'])
           (by
             intro he₀not
@@ -3243,7 +3104,7 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
       have hgt : m < optionWeight d (Finsupp.optionElim m d₀) := by
         exact lt_optionWeight_optionElim d hd m hd₀
       change MvPolynomial.coeff (Finsupp.optionElim m d₀)
-          ((MvPolynomial.aeval (optionTriangularForwardPoly (A := k) d)) p) =
+          ((MvPolynomial.aeval (optionTriangularForwardPoly k d)) p) =
         MvPowerSeries.coeff d₀
           (((algebraMap k (TateAlgebra (Fin n) k)) (MvPowerSeries.coeff e₀ f.1) :
             TateAlgebra (Fin n) k).1)
@@ -3286,21 +3147,17 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
   have hg_norm_le : ‖g‖ ≤ 1 := by
     dsimp [g]
     simpa [hnorm] using (isContractiveHom_optionTriangularForward d hd) f
-  have hh_powerCoeff_le :
-      ∀ l : ℕ, ‖PowerSeries.coeff l h.1‖ ≤ 1 := by
-    intro l
+  have hpl (l : ℕ) : ‖PowerSeries.coeff l h.1‖ ≤ 1 := by
     apply norm_le_of_forall_coeff_le (PowerSeries.coeff l h.1) (by positivity)
     intro d₀
     rw [show h = optionToTate g by rfl, coeff_optionToTate g l d₀]
     exact le_trans (TateAlgebra.coeff_norm_le g (Finsupp.optionElim l d₀)) hg_norm_le
-  have hh_norm_le : ‖h‖ ≤ 1 := by
-    apply norm_le_of_forall_powerSeriesCoeff_le h (by positivity)
-    exact hh_powerCoeff_le
+  have hh_norm_le : ‖h‖ ≤ 1 := norm_le_of_forall_powerSeriesCoeff_le h (by positivity) hpl
   have hopt_add :
       optionToTate g =
         optionToTate gp + optionToTate gr := by
     rw [hg_split]
-    exact (optionToTateAlgEquiv (τ := Fin n)).map_add gp gr
+    exact (optionToTateAlgEquiv k (Fin n)).map_add gp gr
   have hc₀_norm : ‖MvPowerSeries.coeff e₀ f.1‖ = 1 := (hs e₀).1 he₀s
   have hc₀_ne : MvPowerSeries.coeff e₀ f.1 ≠ 0 := by
     intro hzero
@@ -3318,30 +3175,11 @@ lemma exists_optionTriangularForward_distinguished {n : ℕ}
           (PowerSeries.coeff m) ↑(optionToTate gr)
     simp [hgp_coeff_m]
   have hdist : TateAlgebra.IsDistinguishedOfOrder h m :=
-    isDistinguishedOfOrder_of_optionToTate_data
-      (h := h) (gp := gp) (gr := gr) (c₀ := (coeff e₀) ↑f) (m := m)
-      hh_norm_le
-      (show h = optionToTate gp + optionToTate gr from hopt_add)
-      hgp_coeff_high hgr_powerCoeff_lt hh_coeff_m_eq hc₀_norm hc₀_ne
+    isDistinguishedOfOrder_of_optionToTate_data hh_norm_le hopt_add hgp_coeff_high hgr_powerCoeff_lt
+      hh_coeff_m_eq hc₀_norm hc₀_ne
   exact ⟨d, hd, m, hdist⟩
 
 section IsNoetherianRing
-
-theorem _root_.Ideal.fg_of_fg_map_of_fg_inf_ker_of_surjective {R S : Type*} [CommRing R]
-    [CommRing S] {f : R →+* S} {I : Ideal R} (hmap : (I.map f).FG) (hk : (I ⊓ (RingHom.ker f)).FG)
-    (hf : Function.Surjective f) : I.FG := by
-  algebraize [f]
-  have h : Submodule.map (Module.compHom.toLinearMap f) I = (I.map f).restrictScalars R := by
-    ext
-    have : RingHomSurjective f := ⟨hf⟩
-    simp [Ideal.map_eq_submodule_map]
-  refine Submodule.fg_of_fg_map_of_fg_inf_ker (Module.compHom.toLinearMap f) ?_ hk
-  simpa [h] using Submodule.FG.restrictScalars_of_surjective hmap hf
-
-lemma _root_.Ideal.fg_of_quotient_map_fg {R : Type*} [CommRing R] {I J : Ideal R}
-    (hmap : (Ideal.map (Ideal.Quotient.mk J) I).FG) (hJ : J.FG) (hJI : J ≤ I) : I.FG :=
-  Ideal.fg_of_fg_map_of_fg_inf_ker_of_surjective hmap (by simpa [inf_eq_right.mpr hJI] using hJ)
-    Quotient.mk_surjective
 
 theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUltrametricDist k] :
     ∀ n : ℕ, IsNoetherianRing (TateAlgebra (Fin n) k) := by
@@ -3352,7 +3190,7 @@ theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUl
         finZeroAlgEquiv.symm.surjective
   | succ n ih =>
       let e : TateAlgebra (Fin (n + 1)) k ≃ₐ[k] TateAlgebra (Option (Fin n)) k :=
-            tateAlgebraFinSuccEquiv (A := k) n
+            tateAlgebraFinSuccEquiv n
       have hopt : IsNoetherianRing (TateAlgebra (Option (Fin n)) k) := by
         rw [isNoetherianRing_iff_ideal_fg]
         intro J
@@ -3420,21 +3258,15 @@ theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUl
             linarith [hnorm_f₁]
           obtain ⟨d, hd, m, hdist⟩ :=
             exists_optionTriangularForward_distinguished f₁ hf₁ne hnorm_f₁
-          let φ := optionTriangularForward (A := k) d hd
-          let ψ := optionTriangularInverse (A := k) d hd
-          let J' : Ideal (TateAlgebra (Option (Fin n)) k) := Ideal.map φ.toRingHom J
-          have hαf₁J' : φ f₁ ∈ J' := Ideal.mem_map_of_mem φ.toRingHom hf₁J
-          let eopt :
-              TateAlgebra (Option (Fin n)) k ≃ₐ[k] TateAlgebra Unit (TateAlgebra (Fin n) k) :=
-            optionToTateAlgEquiv (τ := Fin n)
-          let K : Ideal (TateAlgebra Unit (TateAlgebra (Fin n) k)) := Ideal.map eopt.toRingHom J'
-          have hopt_mem : optionToTate (φ f₁) ∈ K := Ideal.mem_map_of_mem eopt.toRingHom hαf₁J'
+          let φ := optionTriangularForward k d hd
+          let ψ := optionTriangularInverse k d hd
+          let J' : Ideal (TateAlgebra (Option (Fin n)) k) := Ideal.map φ J
+          have hαf₁J' : φ f₁ ∈ J' := Ideal.mem_map_of_mem φ hf₁J
+          let eopt := optionToTateAlgEquiv k (Fin n)
+          let K : Ideal (TateAlgebra Unit (TateAlgebra (Fin n) k)) := Ideal.map eopt J'
+          have hopt_mem : optionToTate (φ f₁) ∈ K := Ideal.mem_map_of_mem eopt hαf₁J'
           obtain ⟨we, hwWeier, hunit, hdecomp⟩ :=
-            ExistsUnique.exists
-              (weierstrass_preparation
-                (A := TateAlgebra (Fin n) k)
-                (f := optionToTate (φ f₁))
-                (n := m) hdist)
+            (weierstrass_preparation (f := optionToTate (φ f₁)) hdist).exists
           have hwK : we.1 ∈ K := by
             rcases hunit with ⟨u, hu⟩
             have : u⁻¹.1 * optionToTate (φ f₁) ∈ K := K.mul_mem_left _ hopt_mem
@@ -3445,9 +3277,9 @@ theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUl
             exact htmp
           let Jw : Ideal (TateAlgebra Unit (TateAlgebra (Fin n) k)) := Ideal.span {we.1}
           let φq := Ideal.Quotient.mkₐ (TateAlgebra (Fin n) k) Jw
-          have hφq : φq.toRingHom.Finite :=
+          have hφq : φq.Finite :=
             AlgHom.Finite.of_surjective φq (Ideal.Quotient.mkₐ_surjective _ _)
-          have hwker : we.1 ∈ RingHom.ker φq.toRingHom := by
+          have hwker : we.1 ∈ RingHom.ker φq := by
             simpa [RingHom.mem_ker] using
               Ideal.Quotient.eq_zero_iff_mem.2 <| Ideal.subset_span (by simp)
           have : Module.Finite
@@ -3458,7 +3290,7 @@ theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUl
               (TateAlgebra (Fin n) k) ((TateAlgebra Unit (TateAlgebra (Fin n) k)) ⧸ Jw)
           have hJw_fg : Jw.FG := ⟨{we.1}, by simp [Jw]⟩
           have hJw_le_K : Jw ≤ K := (Ideal.span_singleton_le_iff_mem K).2 hwK
-          have hmap_fg : (Ideal.map φq.toRingHom K).FG := Ideal.FG.of_isNoetherianRing _
+          have hmap_fg : (Ideal.map φq K).FG := Ideal.FG.of_isNoetherianRing _
           have hsurjφ : Function.Surjective φ := by
             intro x
             exact ⟨ψ x, congrArg (fun f => f x) (optionTriangularForward_comp_inverse d hd)⟩
@@ -3472,39 +3304,39 @@ theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUl
               ext x
               constructor
               · intro hx
-                rcases (Ideal.mem_map_iff_of_surjective eopt.symm.toRingHom eopt.symm.surjective).1
+                rcases (Ideal.mem_map_iff_of_surjective eopt.symm eopt.symm.surjective).1
                   hx with
                   ⟨y, hyK, hyEq⟩
-                rcases (Ideal.mem_map_iff_of_surjective eopt.toRingHom eopt.surjective).1 hyK with
+                rcases (Ideal.mem_map_iff_of_surjective eopt eopt.surjective).1 hyK with
                   ⟨z, hzJ', hzEq⟩
                 have : x = z := by
                   rw [← hyEq, ← hzEq]
                   exact eopt.left_inv z
                 simpa [this] using hzJ'
               · intro hx
-                exact (Ideal.mem_map_iff_of_surjective eopt.symm.toRingHom eopt.symm.surjective).2
-                  ⟨eopt x, Ideal.mem_map_of_mem eopt.toRingHom hx, eopt.left_inv x⟩
+                exact (Ideal.mem_map_iff_of_surjective eopt.symm eopt.symm.surjective).2
+                  ⟨eopt x, Ideal.mem_map_of_mem eopt hx, eopt.left_inv x⟩
             exact hback ▸ hfg
           have hJ_fg : (Ideal.map ψ.toRingHom J').FG := Ideal.FG.map hJ'_fg ψ.toRingHom
           have hmap_back : Ideal.map ψ.toRingHom J' = J := by
             ext x
             constructor
             · intro hx
-              rcases (Ideal.mem_map_iff_of_surjective ψ.toRingHom hsurjψ).1 hx with
+              rcases (Ideal.mem_map_iff_of_surjective ψ hsurjψ).1 hx with
                 ⟨y, hyJ', hyEq⟩
-              rcases (Ideal.mem_map_iff_of_surjective φ.toRingHom hsurjφ).1 hyJ' with
+              rcases (Ideal.mem_map_iff_of_surjective φ hsurjφ).1 hyJ' with
                 ⟨z, hzJ, hzEq⟩
               have : x = z := by
                 rw [← hyEq, ← hzEq]
                 exact congrArg (fun f => f z) (optionTriangularInverse_comp_forward d hd)
               simpa [this] using hzJ
             · intro hx
-              exact (Ideal.mem_map_iff_of_surjective ψ.toRingHom hsurjψ).2
-                ⟨φ x, Ideal.mem_map_of_mem φ.toRingHom hx,
+              exact (Ideal.mem_map_iff_of_surjective ψ hsurjψ).2
+                ⟨φ x, Ideal.mem_map_of_mem φ hx,
                   congrArg (fun f ↦ f x) (optionTriangularInverse_comp_forward d hd)⟩
           exact hmap_back ▸ hJ_fg
       exact isNoetherianRing_of_surjective (TateAlgebra (Option (Fin n)) k)
-        (TateAlgebra (Fin (n + 1)) k) e.symm.toRingHom e.symm.surjective
+        (TateAlgebra (Fin (n + 1)) k) e.symm e.symm.surjective
 
 instance {σ : Type*} [Finite σ] : IsNoetherianRing (TateAlgebra σ k) := by
   let : Fintype σ := Fintype.ofFinite σ
@@ -3513,7 +3345,7 @@ instance {σ : Type*} [Finite σ] : IsNoetherianRing (TateAlgebra σ k) := by
   let e : σ ≃ τ := Fintype.equivFin σ
   let ρ : TateAlgebra (Fin n) k →ₐ[k] TateAlgebra σ k := TateAlgebra.rename k e.symm.toEmbedding
   have hfin : IsNoetherianRing (TateAlgebra (Fin n) k) := isNoetherianRing_fin k n
-  refine isNoetherianRing_of_surjective (TateAlgebra (Fin n) k) (TateAlgebra σ k) ρ.toRingHom ?_
+  refine isNoetherianRing_of_surjective (TateAlgebra (Fin n) k) (TateAlgebra σ k) ρ ?_
   intro y
   refine ⟨TateAlgebra.rename k e.toEmbedding y, ?_⟩
   apply Subtype.ext
@@ -3527,7 +3359,7 @@ omit [NormOneClass A] [NormMulClass A] [CompleteSpace A] in
 lemma tateToOption_optionToTate_mul {n : ℕ} (f g : TateAlgebra (Option (Fin n)) A) :
     tateToOption (optionToTate f * optionToTate g) = f * g := by
   have hmul : optionToTate (f * g) = optionToTate f * optionToTate g :=
-    optionToTateAlgEquiv.map_mul f g
+    (optionToTateAlgEquiv A (Fin n)).map_mul f g
   rw [← hmul]
   simp
 
@@ -3549,17 +3381,17 @@ theorem isNoetherianRing : IsNoetherianRing A := by
 omit [CompleteSpace k] [IsStrictAffinoid k A] in
 lemma noether_normalization_drop_option
     {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k →ₐ[k] A)
-    (hcontr : IsContractiveHom φ.toRingHom) (hfin : φ.Finite)
+    (hcontr : IsContractiveHom φ) (hfin : φ.Finite)
     (hinj : ¬ Function.Injective φ) :
     ∃ φ₁ : TateAlgebra (Option (Fin n)) k →ₐ[k] A,
-      IsContractiveHom φ₁.toRingHom ∧ φ₁.Finite ∧ ¬ Function.Injective φ₁ := by
+      IsContractiveHom φ₁ ∧ φ₁.Finite ∧ ¬ Function.Injective φ₁ := by
   let e₁ : TateAlgebra (Fin (n + 1)) k ≃ₐ[k] TateAlgebra (Option (Fin n)) k :=
     tateAlgebraFinSuccEquiv n
   let φ₁ : TateAlgebra (Option (Fin n)) k →ₐ[k] A := φ.comp e₁.symm
-  have hcontr₁ : IsContractiveHom φ₁.toRingHom := by
+  have hcontr₁ : IsContractiveHom φ₁ := by
     refine IsContractiveHom.comp ?_ hcontr
     simpa [φ₁, e₁, tateAlgebraFinSuccEquiv] using
-      rename_isContractiveHom (σ := Option (Fin n)) (τ := Fin (n + 1)) (finSuccEquiv n).symm
+      rename_isContractiveHom (finSuccEquiv n).symm.toEmbedding
   have hfin₁ : φ₁.Finite := RingHom.Finite.comp hfin e₁.symm.toRingEquiv.finite
   have hninj₁ : ¬ Function.Injective φ₁ := by
     intro hφ₁
@@ -3571,8 +3403,8 @@ lemma noether_normalization_drop_option
 
 omit [IsStrictAffinoid k A] in
 theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k →ₐ[k] A)
-    (hcontr : IsContractiveHom φ.toRingHom) (hfin : φ.Finite) (hinj : ¬ Function.Injective φ) :
-    ∃ ψ : TateAlgebra (Fin n) k →ₐ[k] A, IsContractiveHom ψ.toRingHom ∧ ψ.Finite := by
+    (hcontr : IsContractiveHom φ) (hfin : φ.Finite) (hinj : ¬ Function.Injective φ) :
+    ∃ ψ : TateAlgebra (Fin n) k →ₐ[k] A, IsContractiveHom ψ ∧ ψ.Finite := by
   obtain ⟨φ₁, hcontr₁, hfin₁, hninj₁⟩ :=
     noether_normalization_drop_option φ hcontr hfin hinj
   obtain ⟨f, hfker, hfne⟩ :
@@ -3601,9 +3433,9 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
     field_simp [hc_ne]
   obtain ⟨d, hd, m, hdist⟩ := exists_optionTriangularForward_distinguished f₁ hf₁ne hnorm_f₁
   obtain ⟨we, hw, hunit, hdecomp⟩ := TateAlgebra.weierstrass_preparation_exists hdist
-  have hbij₂ : Function.Bijective (optionTriangularInverse (A := k) d hd) := by
+  have hbij₂ : Function.Bijective (optionTriangularInverse k d hd) := by
     refine Function.bijective_iff_has_inverse.mpr ?_
-    refine ⟨optionTriangularForward d hd, ?_, ?_⟩
+    refine ⟨optionTriangularForward k d hd, ?_, ?_⟩
     · intro x
       simpa [AlgHom.comp_apply] using
         congrArg
@@ -3616,8 +3448,8 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
           (fun F =>
             F x)
           (optionTriangularInverse_comp_forward d hd)
-  have hfin_inv : (optionTriangularInverse d hd).toRingHom.Finite :=
-    (RingEquiv.ofBijective (optionTriangularInverse d hd) hbij₂).finite
+  have hfin_inv : (optionTriangularInverse k d hd).Finite :=
+    (RingEquiv.ofBijective (optionTriangularInverse k d hd) hbij₂).finite
   have hopt_mul (f g : TateAlgebra (Option (Fin n)) k) :
       optionToTate (f * g) = optionToTate f * optionToTate g := by
     calc
@@ -3669,7 +3501,7 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
   have htate_algMap (a : TateAlgebra (Fin n) k) :
       tateToOption
         ((algebraMap (TateAlgebra (Fin n) k) (TateAlgebra Unit (TateAlgebra (Fin n) k))) a) =
-        TateAlgebra.rename k Function.Embedding.some a := by
+          TateAlgebra.rename k Function.Embedding.some a := by
     apply Subtype.ext
     ext e
     by_cases h : e none = 0
@@ -3677,26 +3509,24 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
         rfl
     · rw [tateToOption, TateAlgebra.rename]
       simp [PowerSeries.coeff_C, h, coeff_rename_some]
-  let Φ0 : TateAlgebra (Option (Fin n)) k →ₐ[k] A := φ₁.comp (optionTriangularInverse d hd)
-  have hcontr₀ : IsContractiveHom Φ0.toRingHom := by
+  let Φ0 : TateAlgebra (Option (Fin n)) k →ₐ[k] A := φ₁.comp (optionTriangularInverse k d hd)
+  have hcontr₀ : IsContractiveHom Φ0 := by
     refine IsContractiveHom.comp ?_ hcontr₁
     simpa using isContractiveHom_optionTriangularInverse d hd
-  have hfin₀ : Φ0.toRingHom.Finite := by
+  have hfin₀ : Φ0.Finite := by
     refine RingHom.Finite.comp hfin₁ hfin_inv
-  have hker₀ : Φ0 ((optionTriangularForward d hd) f₁) = 0 := by
-    rw [show Φ0 ((optionTriangularForward d hd) f₁) = φ₁ f₁ by
+  have hker₀ : Φ0 ((optionTriangularForward k d hd) f₁) = 0 := by
+    rw [show Φ0 ((optionTriangularForward k d hd) f₁) = φ₁ f₁ by
       simpa [Φ0, AlgHom.comp_apply] using
-        congrArg (fun F =>
-          φ₁ (F f₁)) (optionTriangularInverse_comp_forward d hd)]
+        congrArg (fun F => φ₁ (F f₁)) (optionTriangularInverse_comp_forward d hd)]
     exact hf₁ker
-  let e₂ : TateAlgebra (Option (Fin n)) k ≃ₐ[k] TateAlgebra Unit (TateAlgebra (Fin n) k) :=
-    optionToTateAlgEquiv
+  let e₂ := optionToTateAlgEquiv k (Fin n)
   let ψ0 : TateAlgebra (Fin n) k →ₐ[k] A :=
     Φ0.comp (TateAlgebra.rename k Function.Embedding.some)
   have hcontrRenameSome :
       IsContractiveHom
         ((TateAlgebra.rename k Function.Embedding.some :
-          TateAlgebra (Fin n) k →ₐ[k] TateAlgebra (Option (Fin n)) k)).toRingHom := by
+          TateAlgebra (Fin n) k →ₐ[k] TateAlgebra (Option (Fin n)) k)) := by
     intro r
     refine norm_le_of_forall_coeff_le (TateAlgebra.rename k Function.Embedding.some r)
       (norm_nonneg r) ?_
@@ -3704,29 +3534,25 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
     by_cases h : e none = 0
     · simpa [TateAlgebra.rename, coeff_rename_some, h] using TateAlgebra.coeff_norm_le r e.some
     · simp [TateAlgebra.rename, coeff_rename_some, h]
-  have hcontrψ0 : IsContractiveHom ψ0.toRingHom := hcontrRenameSome.comp hcontr₀
-  letI : Algebra (TateAlgebra (Fin n) k) A := ψ0.toRingHom.toAlgebra
+  have hcontrψ0 : IsContractiveHom ψ0 := hcontrRenameSome.comp hcontr₀
+  letI : Algebra (TateAlgebra (Fin n) k) A := ψ0.toAlgebra
   let Φk : TateAlgebra Unit (TateAlgebra (Fin n) k) →ₐ[k] A := Φ0.comp e₂.symm.toAlgHom
   have hΦcomm (a : TateAlgebra (Fin n) k) :
       Φk ((algebraMap (TateAlgebra (Fin n) k) (TateAlgebra Unit (TateAlgebra (Fin n) k))) a) =
         algebraMap (TateAlgebra (Fin n) k) A a := by
-    change Φ0 (tateToOption ((algebraMap (TateAlgebra (Fin n) k)
-      (TateAlgebra Unit (TateAlgebra (Fin n) k))) a)) = ψ0 a
+    change Φ0 (tateToOption _) = ψ0 a
     rw [htate_algMap]
     rfl
   let Φ : TateAlgebra Unit (TateAlgebra (Fin n) k) →ₐ[TateAlgebra (Fin n) k] A :=
-    { toRingHom := Φk.toRingHom
+    { toRingHom := Φk
       commutes' := hΦcomm }
-  have hfinΦk : Φk.toRingHom.Finite :=
+  have hfinΦk : Φk.Finite :=
     RingHom.Finite.comp hfin₀ <| AlgHom.Finite.of_surjective e₂.symm.toAlgHom e₂.symm.surjective
-  have hfinΦ : Φ.toRingHom.Finite := hfinΦk
-  have hkerΦ :
-      optionToTate ((optionTriangularForward d hd) f₁) ∈ RingHom.ker Φ.toRingHom := by
+  have hkerΦ : optionToTate ((optionTriangularForward k d hd) f₁) ∈ RingHom.ker Φ := by
     rw [RingHom.mem_ker]
-    change Φ0 (tateToOption (optionToTate ((optionTriangularForward d hd) f₁))) = 0
-    simpa using (show Φ0 (tateToOption (optionToTate ((optionTriangularForward d hd) f₁))) = 0 by
-      simpa using hker₀)
-  have hwker : we.1 ∈ RingHom.ker Φ.toRingHom := by
+    change Φ0 (tateToOption (optionToTate ((optionTriangularForward k d hd) f₁))) = 0
+    simpa using hker₀
+  have hwker : we.1 ∈ RingHom.ker Φ := by
     rw [RingHom.mem_ker]
     have hmul0 : Φ we.2 * Φ we.1 = 0 := by
       simpa [hdecomp, map_mul] using hkerΦ
@@ -3741,59 +3567,37 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
     have hwe1 : Φ we.1 = ((u⁻¹.1 : A) * Φ we.2) * Φ we.1 := by
       rw [hu', one_mul]
     exact hwe1.trans htmp'
-  have hfinψ0 : ψ0.Finite := by
-    change (algebraMap (TateAlgebra (Fin n) k) A).Finite
-    exact TateAlgebra.weierstrass_finiteness hfinΦ hw hwker
+  have hfinψ0 : ψ0.Finite := TateAlgebra.weierstrass_finiteness hfinΦk hw hwker
   exact ⟨ψ0, hcontrψ0, hfinψ0⟩
 
 variable (k) (A) in
 /-- **Noether normalization**: Any nonzero strictly affinoid algebra admits a finite injective map
 from a Tate algebra. -/
 theorem noether_normalization : ∃ (σ : Type) (_ : Fintype σ) (φ : TateAlgebra σ k →ₐ[k] A)
-    (_ : Function.Injective φ) (_ : IsContractiveHom φ.toRingHom), φ.toRingHom.Finite := by
-  have haux :
-      ∀ n : ℕ, ∀ φ : TateAlgebra (Fin n) k →ₐ[k] A,
-        IsContractiveHom φ.toRingHom →
-        φ.toRingHom.Finite →
-        ∃ (σ : Type) (_ : Fintype σ) (ψ : TateAlgebra σ k →ₐ[k] A),
-          Function.Injective ψ ∧ IsContractiveHom ψ.toRingHom ∧ ψ.toRingHom.Finite := by
-    intro n
-    induction n with
-    | zero =>
-        intro φ hcontr hfin
-        have hcomp :
-            φ.comp finZeroAlgEquiv.symm.toAlgHom =
-              { toRingHom := algebraMap k A
-                commutes' := fun r => rfl } := by
-          apply AlgHom.ext
-          intro r
-          change φ ((algebraMap k (TateAlgebra (Fin 0) k)) r) = (algebraMap k A) r
-          simp
-        have hcomp_apply (r : k) :
-            φ (finZeroAlgEquiv.symm r) = algebraMap k A r := by
-          simpa [AlgHom.comp_apply] using congrArg (fun f : k →ₐ[k] A => f r) hcomp
-        have hcomp_inj : Function.Injective (φ.comp finZeroAlgEquiv.symm.toAlgHom) := by
-          intro a b hab
-          apply (algebraMap_isometry k A).injective
-          rw [← hcomp_apply a, ← hcomp_apply b]
-          exact hab
-        have hinj : Function.Injective φ := by
-          intro x y hxy
-          apply finZeroAlgEquiv.injective
-          apply hcomp_inj
-          simpa [AlgHom.comp_apply] using hxy
-        exact ⟨Fin 0, inferInstance, φ, hinj, hcontr, hfin⟩
-    | succ n ih =>
-        intro φ hcontr hfin
-        by_cases hinj : Function.Injective φ
-        · exact ⟨Fin (n + 1), inferInstance, φ, hinj, hcontr, hfin⟩
-        · rcases noether_normalization_drop φ hcontr hfin hinj with
-            ⟨ψ, hψcontr, hψfin⟩
-          exact ih ψ hψcontr hψfin
+    (_ : Function.Injective φ) (_ : IsContractiveHom φ), φ.Finite := by
   rcases exists_fin_contractve_presentation k A with ⟨n, φ, hcontr, hsurj⟩
-  rcases haux n φ hcontr (AlgHom.Finite.of_surjective φ hsurj) with
-    ⟨σ, hσ, ψ, hinj, hψcontr, hψfin⟩
-  exact ⟨σ, hσ, ψ, hinj, hψcontr, hψfin⟩
+  have hfin : φ.Finite := AlgHom.Finite.of_surjective φ hsurj
+  clear hsurj
+  induction n with
+  | zero =>
+      have hcomp_apply (r : k) :
+          φ ((algebraMap k (TateAlgebra (Fin 0) k)) r) = (algebraMap k A) r := by simp
+      have hcomp_inj : Function.Injective (φ.comp finZeroAlgEquiv.symm.toAlgHom) := by
+        intro a b hab
+        apply (algebraMap_isometry k A).injective
+        rw [← hcomp_apply a, ← hcomp_apply b]
+        exact hab
+      have hinj : Function.Injective φ := by
+        intro x y hxy
+        apply finZeroAlgEquiv.injective
+        apply hcomp_inj
+        simpa [AlgHom.comp_apply] using hxy
+      exact ⟨Fin 0, inferInstance, φ, hinj, hcontr, hfin⟩
+  | succ n ih =>
+      by_cases hinj : Function.Injective φ
+      · exact ⟨Fin (n + 1), inferInstance, φ, hinj, hcontr, hfin⟩
+      · rcases noether_normalization_drop φ hcontr hfin hinj with ⟨ψ, hψcontr, hψfin⟩
+        exact ih ψ hψcontr hψfin
 
 end IsStrictAffinoid
 

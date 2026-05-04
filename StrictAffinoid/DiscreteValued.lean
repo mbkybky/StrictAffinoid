@@ -400,6 +400,8 @@ private instance {k : Type*} [NontriviallyNormedField k] [CompleteSpace k] [IsUl
 variable {A B : Type*} [NormedCommRing A] [NormedAlgebra k A]
   [IsStrictAffinoid k A] [NormedCommRing B] [NormedAlgebra k B] [IsStrictAffinoid k B]
 
+/-- Let $\mathscr{A}$ be a strict affinoid algebra over a discretely valued field, then the
+$\mathscr{A}^\circ$ is a Noetherian ring. -/
 instance instIntegerIsNoetherianRing : IsNoetherianRing (Integer k A) := by
   rcases IsStrictAffinoid.presentation k A with ⟨σ, _, φ, -, hφsurj⟩
   algebraize [φ.toRingHom]
@@ -409,9 +411,13 @@ instance instIntegerIsNoetherianRing : IsNoetherianRing (Integer k A) := by
 instance [Algebra A B] [IsScalarTower k A B] [Module.Finite A B] :
     Module.Finite (Integer k A) (Integer k B) := inferInstance
 
+/-- If $f : \mathscr{A} \to \mathscr{B}$ is a finite morphism of strict affinoid algebras over a
+discretely valued field, then the induced morphism
+$f^\circ : \mathscr{A}^\circ \to \mathscr{B}^\circ$ is finite. -/
 theorem integerMap_finite_of_finite (f : A →ₐ[k] B)
-    (hf : f.toRingHom.Finite) : (integerMap f).toRingHom.Finite := by
+    (hf : f.Finite) : (integerMap f).toRingHom.Finite := by
   algebraize [f.toRingHom]
+  have : Module.Finite A B := RingHom.finite_algebraMap.mp hf
   exact show Module.Finite (Integer k A) (Integer k B) from inferInstance
 
 end IsStrictAffinoid

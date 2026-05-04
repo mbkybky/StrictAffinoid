@@ -218,24 +218,27 @@ lemma coe_one :
 
 @[simp]
 lemma coe_add (F G : TateAlgebra σ R) :
-    ((F + G : TateAlgebra σ R) : MvPowerSeries σ R) = (F : MvPowerSeries σ R) + G := rfl
+    (F + G : TateAlgebra σ R) = F.val + G.val := rfl
 
 @[simp]
 lemma coe_mul (F G : TateAlgebra σ R) :
-    ((F * G : TateAlgebra σ R) : MvPowerSeries σ R) = (F : MvPowerSeries σ R) * G := rfl
+    (F * G : TateAlgebra σ R) = F.val * G.val := rfl
+
+@[simp]
+lemma coe_pow (F : TateAlgebra σ R) (n : ℕ) :
+    (F ^ n : MvPowerSeries σ R) = F.val ^ n := rfl
 
 @[simp]
 lemma coe_neg (F : TateAlgebra σ R) :
-    ((- F : TateAlgebra σ R) : MvPowerSeries σ R) = - (F : MvPowerSeries σ R) := rfl
+    (- F : TateAlgebra σ R) = - F.val := rfl
 
 @[simp]
 lemma coe_sub (F G : TateAlgebra σ R) :
-    ((F - G : TateAlgebra σ R) : MvPowerSeries σ R) = (F : MvPowerSeries σ R) - G := rfl
+    (F - G : TateAlgebra σ R) = F.val - G.val := rfl
 
 @[simp]
 lemma coe_algebraMap (r : R) :
-    ((algebraMap R (TateAlgebra σ R) r : TateAlgebra σ R) : MvPowerSeries σ R) =
-      algebraMap R (MvPowerSeries σ R) r := rfl
+    algebraMap R (TateAlgebra σ R) r = algebraMap R (MvPowerSeries σ R) r := rfl
 
 /-- The indeterminate `s` in the Tate algebra in variables `σ`. -/
 noncomputable def X (s : σ) : TateAlgebra σ R := ⟨MvPowerSeries.X s, isTate_X s⟩
@@ -798,7 +801,8 @@ end MvPolynomial
 end toTate
 
 /-- A morphism of normed commutative rings is contractive if it does not increase norms. -/
-def IsContractiveHom {A B : Type*} [SeminormedRing A] [SeminormedRing B] (f : A →+* B) : Prop :=
+def IsContractiveHom {A B F : Type*} [SeminormedRing A] [SeminormedRing B] [FunLike F A B]
+    [RingHomClass F A B] (f : F) : Prop :=
   ∀ a : A, ‖f a‖ ≤ ‖a‖
 
 lemma IsContractiveHom.comp {A B C : Type*} [SeminormedRing A] [SeminormedRing B] [SeminormedRing C]
@@ -807,13 +811,13 @@ lemma IsContractiveHom.comp {A B C : Type*} [SeminormedRing A] [SeminormedRing B
   intro x
   exact le_trans (hg _) (hf _)
 
-lemma TateAlgebra.rename_isContractiveHom (e : σ ↪ τ) :
-    IsContractiveHom (rename R e).toRingHom :=
+lemma TateAlgebra.rename_isContractiveHom (e : σ ↪ τ) : IsContractiveHom (rename R e) :=
   rename_norm_le e
 
 /-- A morphism of normed commutative rings is admissible if the induced quotient norm on its
 image is equivalent to the restricted norm from the target. -/
-def IsAdmissibleHom {A B : Type*} [SeminormedRing A] [SeminormedRing B] (f : A →+* B) : Prop :=
+def IsAdmissibleHom {A B F : Type*} [SeminormedRing A] [SeminormedRing B] [FunLike F A B]
+    [RingHomClass F A B] (f : F) : Prop :=
   ∃ C > 0, ∀ x : A, sInf {r : ℝ | ∃ a : A, f a = f x ∧ ‖a‖ = r} ≤ C * ‖f x‖ ∧ ‖f x‖ ≤ C * ‖x‖
 
 section NormField
@@ -828,16 +832,16 @@ noncomputable instance (σ : Type*) : NormedAlgebra k (TateAlgebra σ k) where
         congr
         exact TateAlgebra.gaussNorm_C r
 
-/-- A strict and reduced `k`-affinoid algebra with its spectral norm, modeled here as a
-non-Archimedean normed algebra admitting an admissible surjective Tate algebra presentation. -/
+/-- A strict `k`-affinoid algebra with its spectral seminorm. In fact, in this definition the
+spectral seminorm must be a norm and `A` must be reduced due to the admissible assumption. -/
 class IsStrictAffinoid (k : Type*) [NormedField k] [CompleteSpace k] [IsUltrametricDist k]
-    (A : Type*) [NormedCommRing A] [NormedAlgebra k A] :
+    (A : Type*) [SeminormedRing A] [NormedAlgebra k A] :
     Prop extends NormOneClass A, CompleteSpace A, IsUltrametricDist A where
   withSpectralNorm (n : ℕ) (a : A) : ‖a ^n‖ = ‖a‖ ^ n
   presentation (k A) : ∃ (σ : Type) (_ : Fintype σ) (φ : TateAlgebra σ k →ₐ[k] A)
-    (_ : IsAdmissibleHom φ.toRingHom), Function.Surjective φ
+    (_ : IsAdmissibleHom φ), Function.Surjective φ
 
-variable [CompleteSpace k] {A : Type*} [NormedCommRing A] [NormedAlgebra k A] [IsStrictAffinoid k A]
+variable [CompleteSpace k] {A : Type*} [SeminormedRing A] [NormedAlgebra k A] [IsStrictAffinoid k A]
 
 namespace IsStrictAffinoid
 
@@ -863,7 +867,7 @@ instance {σ : Type*} [Finite σ] : IsStrictAffinoid k (TateAlgebra σ k) where
     · refine ⟨1, zero_lt_one, ?_⟩
       intro x
       constructor
-      · let Q : Set ℝ := {r : ℝ | ∃ a : TateAlgebra τ k, φ.toRingHom a = φ.toRingHom x ∧ ‖a‖ = r}
+      · let Q : Set ℝ := {r : ℝ | ∃ a : TateAlgebra τ k, φ a = φ x ∧ ‖a‖ = r}
         have hQbdd : BddBelow Q := by
           refine ⟨0, ?_⟩
           intro r hr
@@ -882,14 +886,15 @@ instance {σ : Type*} [Finite σ] : IsStrictAffinoid k (TateAlgebra σ k) where
       have h := congrArg (fun f : TateAlgebra σ k →ₐ[k] TateAlgebra σ k => f y) hφψ
       simpa [AlgHom.comp_apply, φ, ψ] using h
 
-lemma isContractiveHom_of_admissible {B : Type*} [NormedCommRing B] [NormedAlgebra k B]
-    [IsStrictAffinoid k B] {f : A →ₐ[k] B} (ha : IsAdmissibleHom f.toRingHom) :
-    IsContractiveHom f.toRingHom := by
+lemma isContractiveHom_of_admissible {B : Type*} [SeminormedRing B] [NormedAlgebra k B]
+    [IsStrictAffinoid k B] {f : A →ₐ[k] B} (ha : IsAdmissibleHom f) :
+    IsContractiveHom f := by
   rcases ha with ⟨C, hCpos, hC⟩
   intro x
   by_cases hx0 : ‖x‖ = 0
-  · have hx : x = 0 := norm_eq_zero.mp hx0
-    simp [hx]
+  · have h := (hC x).2
+    simp only [hx0, mul_zero] at h ⊢
+    exact h
   · by_contra hfx
     have hlt : ‖x‖ < ‖f x‖ := lt_of_not_ge hfx
     have hxpos : 0 < ‖x‖ := lt_of_le_of_ne (norm_nonneg _) (Ne.symm hx0)
@@ -917,7 +922,7 @@ lemma isContractiveHom_of_admissible {B : Type*} [NormedCommRing B] [NormedAlgeb
 
 variable (k) (A) in
 lemma exists_fin_contractve_presentation :
-    ∃ (n : ℕ) (φ : TateAlgebra (Fin n) k →ₐ[k] A) (_ : IsContractiveHom φ.toRingHom),
+    ∃ (n : ℕ) (φ : TateAlgebra (Fin n) k →ₐ[k] A) (_ : IsContractiveHom φ),
     Function.Surjective φ := by
   rcases IsStrictAffinoid.presentation k A with ⟨σ, _, φ, hφadm, hφsurj⟩
   let n := Fintype.card σ

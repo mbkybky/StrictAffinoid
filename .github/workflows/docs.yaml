@@ -1,6 +1,8 @@
 name: Build docs
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - "StrictAffinoid"
 jobs:
   build:
     permissions:
