@@ -1238,15 +1238,15 @@ lemma weierstrass_preparation_exists {f : TateAlgebra Unit A} {n : ℕ}
     simpa [Q, hUQ] using hQg
   have hgFact : g = UQ⁻¹.1 * polynomialToTate wPoly := by
     exact (by simp : g = UQ⁻¹.1 * ((UQ : TateAlgebra Unit A) * g)).trans (by rw [hQgUQ])
-  have hfFact : f = e * polynomialToTate wPoly := by
-    have h1 : f = (algebraMap A (TateAlgebra Unit A) (u : A)) * g := by
-      dsimp [g]; rw [Algebra.smul_def]
-      exact (by simp : f = (1 : TateAlgebra Unit A) * f).trans <|
-            (by simp : (1 : TateAlgebra Unit A) * f = (algebraMap A (TateAlgebra Unit A) ((u : A) * (u⁻¹.1 : A))) * f).trans <|
-            (by rw [map_mul] : (algebraMap A (TateAlgebra Unit A) ((u : A) * (u⁻¹.1 : A))) * f = ((algebraMap A (TateAlgebra Unit A) (u : A)) * (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A))) * f).trans <|
-            (by ring)
-    exact h1.trans <| (by rw [hgFact] : (algebraMap A (TateAlgebra Unit A) (u : A)) * g = (algebraMap A (TateAlgebra Unit A) (u : A)) * (UQ⁻¹.1 * polynomialToTate wPoly)).trans <| (by simp [e, mul_assoc])
-  exact ⟨⟨polynomialToTate wPoly, e⟩, hwWeier, heUnit, hfFact⟩
+  exact ⟨⟨polynomialToTate wPoly, e⟩, hwWeier, heUnit, by
+    calc
+      f = (algebraMap A (TateAlgebra Unit A) (u : A)) * g := by
+        simp [g, Algebra.smul_def]
+        calc _ = (algebraMap A (TateAlgebra Unit A) ((u : A) * (u⁻¹.1 : A))) * f := by simp
+          _ = _ := by
+            rw [map_mul]
+            ring
+      _ = e * polynomialToTate wPoly := by simp [hgFact, e, mul_assoc]⟩
 
 /-- ***Weierstrass Preparation theorem**: A distinguished series of order `n` factors uniquely as a
 unit times a Weierstrass polynomial of degree `n`. -/
@@ -1315,15 +1315,9 @@ theorem weierstrass_preparation {f : TateAlgebra Unit A} {n : ℕ}
     rcases henUnit with ⟨Ue, hUe⟩
     refine ⟨Ue⁻¹.1, Polynomial.X ^ n - truncPolynomial w n, hrdeg, ?_, hwpoly_eq, rfl⟩
     have hgEq : g = (Ue : TateAlgebra Unit A) * w := by
-      exact (by simp [g, Algebra.smul_def] : g = (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * f).trans <|
-        (by rw [hfw] : _ = (algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * (e * w)).trans <|
-        (by ring : _ = ((algebraMap A (TateAlgebra Unit A) (u⁻¹.1 : A)) * e) * w).trans <|
-        (by rw [hUe])
-    exact (by simp [Xn, polynomialToTate_sub] : Xn = polynomialToTate (truncPolynomial w n) + polynomialToTate (Polynomial.X ^ n - truncPolynomial w n)).trans <|
-      (by rw [hwpoly_eq] : _ = w + polynomialToTate (Polynomial.X ^ n - truncPolynomial w n)).trans <|
-      by
-        rw [hgEq]
-        simp
+      simp [g, Algebra.smul_def, hfw, hUe]
+      ring
+    simp [Xn, polynomialToTate_sub, hwpoly_eq, hgEq]
   refine ⟨we0, hwe0, ?_⟩
   intro we hwe
   rcases we0 with ⟨w0, e0⟩
@@ -1775,7 +1769,10 @@ private lemma sum_antidiagonal_optionElim {τ β : Type*} [DecidableEq τ] [AddC
       ∑ x ∈ Finset.antidiagonal n,
         ∑ y ∈ Finset.antidiagonal d, F (Finsupp.optionElim x.1 y.1, Finsupp.optionElim x.2 y.2) :=
           by
-  have h1 : ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), F p = ∑ p ∈ Finset.map (optionAntidiagonalEmbedding) ((Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d), F p := by rw [antidiagonal_optionElim_eq_map n d]
+  have h1 : ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), F p =
+      ∑ p ∈ Finset.map (optionAntidiagonalEmbedding)
+        ((Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d), F p := by
+    rw [antidiagonal_optionElim_eq_map n d]
   have h2 : ∑ p ∈ Finset.map (optionAntidiagonalEmbedding) ((Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d), F p = ∑ z ∈ (Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d, F (optionAntidiagonalEmbedding z) := by rw [Finset.sum_map]
   have h3 : ∑ z ∈ (Finset.antidiagonal n).sigma fun _ => Finset.antidiagonal d, F (optionAntidiagonalEmbedding z) = ∑ x ∈ Finset.antidiagonal n, ∑ y ∈ Finset.antidiagonal d, F (Finsupp.optionElim x.1 y.1, Finsupp.optionElim x.2 y.2) := by rw [Finset.sum_sigma']; rfl
   exact h1.trans (h2.trans h3)
@@ -1801,19 +1798,11 @@ lemma coeff_sum_optionCoeffTate_mul {τ : Type*}
     induction Finset.antidiagonal n using Finset.induction_on with
     | empty => simp
     | @insert x s hx hs => simp [hx, hs]
-  calc
-    _ = (coeff d) (∑ x ∈ Finset.antidiagonal n,
-          (((optionCoeffTate f x.1) *
-              optionCoeffTate g x.2).1)) := congrArg (coeff d) hsum
-    _ = ∑ x ∈ Finset.antidiagonal n,
-          ∑ y ∈ Finset.antidiagonal d,
-            MvPowerSeries.coeff (Finsupp.optionElim x.1 y.1) (f : MvPowerSeries (Option τ) A) *
-              MvPowerSeries.coeff (Finsupp.optionElim x.2 y.2) (g : MvPowerSeries (Option τ) A) :=
-                by
-      rw [map_sum]
-      refine Finset.sum_congr rfl ?_
-      intro x hx
-      simp [optionCoeffTate, MvPowerSeries.coeff_mul]
+  exact (congrArg (coeff d) hsum).trans <| by
+    rw [map_sum]
+    refine Finset.sum_congr rfl ?_
+    intro x hx
+    simp [optionCoeffTate, MvPowerSeries.coeff_mul]
 
 variable (A) in
 /-- The algebra equivalence `A{Option τ} ≃ A{τ}{T}` splitting off `none`. -/
@@ -1833,7 +1822,9 @@ noncomputable def optionToTateAlgEquiv (τ : Type*) :
     ext d
     simp [optionToTate, optionCoeffTate, coeff_optionToPowerSeries, PowerSeries.coeff_mul,
       MvPowerSeries.coeff_mul]
-    exact (by exact sum_antidiagonal_optionElim n d (fun p : ((Option τ →₀ ℕ) × (Option τ →₀ ℕ)) => MvPowerSeries.coeff p.1 f.1 * MvPowerSeries.coeff p.2 g.1) : ∑ p ∈ Finset.antidiagonal (Finsupp.optionElim n d), (coeff p.1) ↑f * (coeff p.2) ↑g = _).trans (coeff_sum_optionCoeffTate_mul f g n d).symm
+    exact sum_antidiagonal_optionElim n d
+      (fun p ↦ MvPowerSeries.coeff p.1 f.1 * MvPowerSeries.coeff p.2 g.1) |>.trans
+        (coeff_sum_optionCoeffTate_mul f g n d).symm
   map_add' := by
     intro f g
     apply Subtype.ext
@@ -1922,9 +1913,8 @@ lemma toTate_mvPolynomialProd_norm_le_one
   refine le_trans (Finset.norm_prod_le _ _) ?_
   refine Finset.prod_le_one (fun i hi => norm_nonneg _) ?_
   intro i hi
-  calc _ = ‖(((a i).toTate) ^ d i)‖ := by simp [MvPolynomial.toTate]
-    _ ≤ ‖(a i).toTate‖ ^ d i := norm_pow_le (((a i).toTate)) (d i)
-    _ ≤ 1 := pow_le_one₀ (norm_nonneg _) (ha i)
+  exact le_of_eq_of_le (by simp [MvPolynomial.toTate]) <|
+    (norm_pow_le (((a i).toTate)) (d i)).trans <| pow_le_one₀ (norm_nonneg _) (ha i)
 
 omit [Finite τ] [NormMulClass A] [CompleteSpace A] in
 lemma coeff_mvPolynomialProd_norm_le_one
@@ -1985,38 +1975,23 @@ lemma isTate_subst_mvPolynomial
     simpa [coeAlg] using hq.symm
   have hpcast :
       ∀ d : ι →₀ ℕ,
-        ((p d : MvPolynomial τ A) : MvPowerSeries τ A) = d.prod fun s e => aPS s ^ e := by
+        ((p d) : MvPowerSeries τ A) = d.prod fun s e => aPS s ^ e := by
     intro d
     have hp : MvPolynomial.aeval a (MvPolynomial.monomial d (1 : A)) = p d := by
-      rw [MvPolynomial.aeval_monomial]
-      simp [p]
-    calc
-      ((p d : MvPolynomial τ A) : MvPowerSeries τ A)
-          = ((MvPolynomial.aeval a (MvPolynomial.monomial d (1 : A)) : MvPolynomial τ A) :
-              MvPowerSeries τ A) := by
-                rw [hp]
-      _ = MvPolynomial.aeval aPS (MvPolynomial.monomial d (1 : A)) := by
-            rw [hAeval]
-      _ = MvPowerSeries.subst aPS
-            (((MvPolynomial.monomial d (1 : A) : MvPolynomial ι A)) : MvPowerSeries ι A) := by
-            rw [MvPowerSeries.subst_coe (MvPolynomial.monomial d (1 : A))]
-      _ = (algebraMap A (MvPowerSeries τ A) (1 : A)) * d.prod (fun s e => aPS s ^ e) := by
-            simpa using (MvPowerSeries.subst_monomial haPS d (1 : A))
-      _ = d.prod (fun s e => aPS s ^ e) := by simp
+      simp [MvPolynomial.aeval_monomial, p]
+    rw [← hp, ← hAeval, ← MvPowerSeries.subst_coe (MvPolynomial.monomial d 1)]
+    simpa using MvPowerSeries.subst_monomial haPS d (1 : A)
   have hTsubset : T ⊆ ⋃ d ∈ S, ((p d).support : Set (τ →₀ ℕ)) := by
     intro e he
-    have hcoeff :
-        MvPowerSeries.coeff e (MvPowerSeries.subst aPS f) =
-          ∑ᶠ d : ι →₀ ℕ,
-            MvPowerSeries.coeff d f •
-              MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A) := by
+    have hcoeff : MvPowerSeries.coeff e (MvPowerSeries.subst aPS f) =
+        ∑ᶠ d : ι →₀ ℕ, MvPowerSeries.coeff d f • MvPowerSeries.coeff e (p d) := by
       rw [MvPowerSeries.coeff_subst haPS f e]
       apply finsum_congr
       intro d
       rw [hpcast d]
     let g : (ι →₀ ℕ) → A := fun d =>
       MvPowerSeries.coeff d f •
-        MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A)
+        MvPowerSeries.coeff e ((p d) : MvPowerSeries τ A)
     have hgfin : Function.HasFiniteSupport g := by
       simpa [g, hpcast] using MvPowerSeries.coeff_subst_finite haPS f e
     let s : Finset (ι →₀ ℕ) := (show (Function.support g).Finite from hgfin).toFinset
@@ -2038,30 +2013,22 @@ lemma isTate_subst_mvPolynomial
     have hcoeff_bd_poly : ‖MvPolynomial.coeff e (p d)‖ ≤ 1 := by
       simpa [p] using coeff_mvPolynomialProd_norm_le_one d a ha1 e
     have hcoeff_bd :
-        ‖MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A)‖ ≤ 1 := by
+        ‖MvPowerSeries.coeff e ((p d) : MvPowerSeries τ A)‖ ≤ 1 := by
       simpa [MvPolynomial.coeff_coe] using hcoeff_bd_poly
     have hdS : d ∈ S := by
-      change ε ≤ ‖MvPowerSeries.coeff d f‖
-      calc
-        ε ≤ ‖g d‖ := hdlarge
-        _ ≤ ‖MvPowerSeries.coeff d f‖ * ‖MvPowerSeries.coeff e ((p d : MvPolynomial τ A) :
-          MvPowerSeries τ A)‖ := by
-          simp [g, smul_eq_mul, norm_mul]
-        _ ≤ ‖MvPowerSeries.coeff d f‖ * 1 := by
-          gcongr
-        _ = ‖MvPowerSeries.coeff d f‖ := by ring
+      apply hdlarge.trans
+      simp only [MvPolynomial.coeff_coe, smul_eq_mul, norm_mul, g]
+      calc _ ≤ ‖MvPowerSeries.coeff d f‖ * 1 := by gcongr
+        _ = ‖MvPowerSeries.coeff d f‖ := by simp
     have hgd_ne : g d ≠ 0 := by
       intro h0
       have : ‖g d‖ = 0 := by simp [h0]
       exact (not_lt_of_ge hdlarge) (by simpa [this] using hε)
     have hpe_ne :
-        MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A) ≠ 0 := by
+        MvPowerSeries.coeff e ((p d) : MvPowerSeries τ A) ≠ 0 := by
       intro h0
       apply hgd_ne
-      dsimp [g]
-      have h0' : MvPolynomial.coeff e (p d) = 0 := by
-        simpa [MvPolynomial.coeff_coe] using h0
-      rw [h0', mul_zero]
+      simp [g, show MvPolynomial.coeff e (p d) = 0 from h0, mul_zero]
     refine Set.mem_iUnion.2 ⟨d, Set.mem_iUnion.2 ⟨hdS, ?_⟩⟩
     exact MvPolynomial.mem_support_iff.mpr (by simpa [MvPolynomial.coeff_coe] using hpe_ne)
   exact (hSfin.biUnion fun d hd => (p d).support.finite_toSet).subset hTsubset
@@ -2122,15 +2089,9 @@ lemma tateMvPolynomialSubst_X
   let aPS : ι → MvPowerSeries τ A := fun j => (a j : MvPowerSeries τ A)
   have haPS : MvPowerSeries.HasSubst aPS := hasSubst_mvPolynomial a ha0
   apply Subtype.ext
-  calc
-    (((tateMvPolynomialSubst a ha0 ha1) (TateAlgebra.X i)) : MvPowerSeries τ A) =
-        MvPowerSeries.subst aPS (MvPowerSeries.X i) := by
-      rw [tateMvPolynomialSubst_coe a ha0 ha1
-        (TateAlgebra.X i)]
-      rfl
-    _ = aPS i := (MvPowerSeries.subst_X haPS i)
-    _ = (((a i).toTate) : MvPowerSeries τ A) := by
-      simp [aPS, MvPolynomial.toTate_coe]
+  rw [tateMvPolynomialSubst_coe a ha0 ha1 (TateAlgebra.X i)]
+  apply (MvPowerSeries.subst_X haPS i).trans
+  simp [aPS, MvPolynomial.toTate_coe]
 
 omit [Finite τ] [CompleteSpace A] in
 lemma tateMvPolynomialSubst_comp {υ : Type*} [Fintype τ]
@@ -2164,15 +2125,9 @@ lemma tateMvPolynomialSubst_comp {υ : Type*} [Fintype τ]
   apply AlgHom.ext
   intro f
   apply Subtype.ext
-  calc
-    _ = MvPowerSeries.subst bPS (MvPowerSeries.subst aPS f.1) := by simp [aPS, bPS]
-    _ = MvPowerSeries.subst (fun i => MvPowerSeries.subst bPS (aPS i)) f.1 :=
-      congrArg (fun F => F ((f : TateAlgebra ι A) : MvPowerSeries ι A))
-        (MvPowerSeries.subst_comp_subst haPS hbPS)
-    _ = MvPowerSeries.subst cPS ((f : TateAlgebra ι A) : MvPowerSeries ι A) := by
-      simpa using congrArg (fun D => MvPowerSeries.subst D (f : MvPowerSeries ι A)) hBC
-    _ = (((tateMvPolynomialSubst c hc0 hc1) f : TateAlgebra υ A) : MvPowerSeries υ A) := by
-      simp [cPS]
+  simp only [AlgHom.coe_comp, Function.comp_apply, tateMvPolynomialSubst_coe]
+  apply (congrArg (fun F => F f.1) (MvPowerSeries.subst_comp_subst haPS hbPS)).trans <|
+    congrArg (fun D => MvPowerSeries.subst D f.1) hBC
 
 omit [Finite τ] [CompleteSpace A] in
 lemma forall_coeff_le_tateMvPolynomialSubst
@@ -2184,7 +2139,7 @@ lemma forall_coeff_le_tateMvPolynomialSubst
   have haPS : MvPowerSeries.HasSubst aPS := hasSubst_mvPolynomial a ha0
   let p : (ι →₀ ℕ) → MvPolynomial τ A := fun d => d.prod fun i n => a i ^ n
   have hpcast : ∀ d : ι →₀ ℕ, d.prod (fun s e => aPS s ^ e) =
-      ((p d : MvPolynomial τ A) : MvPowerSeries τ A) := by
+      ((p d) : MvPowerSeries τ A) := by
     intro d
     simp [aPS, p, Finsupp.prod]
     trans MvPolynomial.coeToMvPowerSeries.ringHom (∏ x ∈ d.support, a x ^ d x)
@@ -2192,23 +2147,11 @@ lemma forall_coeff_le_tateMvPolynomialSubst
       simp
     · rfl
   intro e
-  have hcoeff_subst :
-      MvPowerSeries.coeff e ((tateMvPolynomialSubst a ha0 ha1 f).1) =
-        ∑ᶠ d : ι →₀ ℕ,
-          MvPowerSeries.coeff d f.1 •
-            MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A) := by
-    calc
-      MvPowerSeries.coeff e ((tateMvPolynomialSubst a ha0 ha1 f).1) =
-          MvPowerSeries.coeff e (MvPowerSeries.subst aPS ((f : TateAlgebra ι A) : MvPowerSeries ι
-            A)) := by
-        simp [aPS]
-      _ = ∑ᶠ d : ι →₀ ℕ,
-            MvPowerSeries.coeff d f.1 •
-              MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A) := by
-        simpa [smul_eq_mul, p, hpcast] using MvPowerSeries.coeff_subst haPS f.1 e
+  have hcoeff_subst : MvPowerSeries.coeff e ((tateMvPolynomialSubst a ha0 ha1 f).1) =
+      ∑ᶠ d : ι →₀ ℕ, MvPowerSeries.coeff d f.1 • MvPowerSeries.coeff e (p d) := by
+    simpa [smul_eq_mul, p, hpcast] using MvPowerSeries.coeff_subst haPS f.1 e
   let g : (ι →₀ ℕ) → A := fun d =>
-    MvPowerSeries.coeff d f.1 •
-      MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A)
+    MvPowerSeries.coeff d f.1 • MvPowerSeries.coeff e ((p d) : MvPowerSeries τ A)
   have hgfin : Function.HasFiniteSupport g := by
     simpa [g, p, hpcast] using
       (MvPowerSeries.coeff_subst_finite haPS f.1 e)
@@ -2217,23 +2160,16 @@ lemma forall_coeff_le_tateMvPolynomialSubst
     simpa [s] using finsum_eq_sum g hgfin
   have hterm : ∀ d ∈ s, ‖g d‖ ≤ C := by
     intro d hd
-    have hcoeff_bd_poly :
-        ‖MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A)‖ ≤ 1 := by
-      simpa [p] using coeff_mvPolynomialProd_norm_le_one d a ha1 e
-    calc
-      ‖g d‖ = ‖MvPowerSeries.coeff d f.1‖ *
-          ‖MvPowerSeries.coeff e ((p d : MvPolynomial τ A) : MvPowerSeries τ A)‖ := by
-        simp [g, smul_eq_mul, norm_mul]
-      _ ≤ ‖MvPowerSeries.coeff d f.1‖ * 1 := by
-        gcongr
-      _ = ‖MvPowerSeries.coeff d f.1‖ := by ring
-      _ ≤ C := hcoeff d
-  have hsum_le :
-      ∀ t : Finset (ι →₀ ℕ), (∀ d ∈ t, ‖g d‖ ≤ C) → ‖t.sum g‖ ≤ C := by
+    have hcoeff_bd_poly : ‖MvPowerSeries.coeff e ((p d) : MvPowerSeries τ A)‖ ≤ 1 :=
+      coeff_mvPolynomialProd_norm_le_one d a ha1 e
+    simp only [smul_eq_mul, norm_mul, ge_iff_le, g]
+    calc _ ≤ ‖MvPowerSeries.coeff d f.1‖ * 1 := by gcongr
+      _ ≤ C := by simpa using hcoeff d
+  have hsum_le : ∀ t : Finset (ι →₀ ℕ), (∀ d ∈ t, ‖g d‖ ≤ C) → ‖t.sum g‖ ≤ C := by
     intro t ht
     exact IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg hC ht
   rw [hcoeff_subst, hs_eq]
-  simpa [g] using hsum_le s hterm
+  exact hsum_le s hterm
 
 omit [Finite τ] [CompleteSpace A] in
 lemma forall_coeff_le_one_tateMvPolynomialSubst
@@ -2398,37 +2334,20 @@ lemma coeff_constantCoeff_optionEquivLeft_monomial (d : τ → ℕ)
         (Polynomial.X ^ optionWeight d e : Polynomial A) := by
     subst p
     rw [MvPolynomial.aeval_monomial]
-    calc
-      Polynomial.map MvPolynomial.constantCoeff
-          ((MvPolynomial.optionEquivLeft A τ)
-            (algebraMap A (MvPolynomial (Option τ) A) 1 *
-              e.prod fun i m => optionTriangularForwardPoly A d i ^ m))
-          =
-          Polynomial.X ^ e none *
-            Polynomial.map MvPolynomial.constantCoeff
-              (∏ t, (Polynomial.C (MvPolynomial.X t) + Polynomial.X ^ d t) ^ e (some t)) := by
-        simp [optionEquivLeft_optionTriangularForwardPoly_none,
-          optionEquivLeft_optionTriangularForwardPoly_some]
-      _ = Polynomial.X ^ e none * Polynomial.X ^ ∑ t, d t * e (some t) := by
-        rw [show Polynomial.map MvPolynomial.constantCoeff
-            (∏ t, (Polynomial.C (MvPolynomial.X t) + Polynomial.X ^ d t) ^ e (some t)) =
-            Polynomial.X ^ ∑ t, d t * e (some t) by
-          rw [show (∏ t, (Polynomial.C (MvPolynomial.X t) + Polynomial.X ^ d t) ^ e (some t)) =
-              ∏ t ∈ Finset.univ, (Polynomial.C (MvPolynomial.X t) + Polynomial.X ^ d t) ^ e (some t)
-                by
-            simp]
-          rw [Polynomial.map_prod]
-          simp_rw [hpow]
-          rw [show (∏ x, Polynomial.X ^ (d x * e (some x)) : Polynomial A) =
-              ∏ x ∈ Finset.univ, Polynomial.X ^ (d x * e (some x)) by simp]
-          exact Finset.prod_pow_eq_pow_sum Finset.univ
-            (fun t => d t * e (some t)) (Polynomial.X : Polynomial A)]
-      _ = Polynomial.X ^ optionWeight d e := by
-        rw [← pow_add]
-        congr
-        simp [Nat.mul_comm]
-  have hcoeff := congrArg (fun q : Polynomial A => q.coeff n) hp
-  simpa [Polynomial.coeff_map] using hcoeff
+    simp only [MvPolynomial.algebraMap_eq, MvPolynomial.C_1, Finsupp.prod_pow, Fintype.prod_option,
+      one_mul, map_mul, map_pow, optionEquivLeft_optionTriangularForwardPoly_none, map_prod,
+      optionEquivLeft_optionTriangularForwardPoly_some, Polynomial.map_mul, Polynomial.map_pow,
+      Polynomial.map_X]
+    rw [show Polynomial.map MvPolynomial.constantCoeff
+        (∏ t, (Polynomial.C (MvPolynomial.X t) + Polynomial.X ^ d t) ^ e (some t)) =
+        Polynomial.X ^ ∑ t, d t * e (some t) by
+      rw [Polynomial.map_prod]
+      simp_rw [hpow]
+      exact Finset.prod_pow_eq_pow_sum Finset.univ (fun t => d t * e (some t)) Polynomial.X]
+    rw [← pow_add]
+    congr
+    simp [Nat.mul_comm]
+  simpa [Polynomial.coeff_map] using congrArg (fun q : Polynomial A => q.coeff n) hp
 
 omit [CompleteSpace A] [IsUltrametricDist A] [Fintype τ] in
 omit [NormOneClass A] [NormMulClass A] in
@@ -2638,12 +2557,7 @@ lemma optionTriangularForward_comp_inverse (d : τ → ℕ) (hd : ∀ t, 0 < d t
   apply DFunLike.ext
   intro x
   apply Subtype.ext
-  calc
-    _ = MvPowerSeries.subst (fun i : Option τ => MvPowerSeries.X i)
-        ((x : TateAlgebra (Option τ) A) : MvPowerSeries (Option τ) A) := by
-      simp [c]
-    _ = _ := congrArg (fun f => f ((x : TateAlgebra (Option τ) A) : MvPowerSeries (Option τ) A))
-      MvPowerSeries.subst_self
+  simpa [c] using congrArg (fun f => f x.1) MvPowerSeries.subst_self
 
 omit [CompleteSpace A] in
 lemma optionTriangularInverse_comp_forward (d : τ → ℕ) (hd : ∀ t, 0 < d t) :
@@ -3236,18 +3150,15 @@ theorem isNoetherianRing_fin (k : Type*) [NormedField k] [CompleteSpace k] [IsUl
                   f.1 * MvPowerSeries.C c⁻¹
                 rw [MvPowerSeries.algebraMap_apply, mul_comm]
                 simp]
-              rw [MvPowerSeries.coeff_mul_C]
+              rw [MvPowerSeries.coeff_mul_C, norm_mul, norm_inv]
               calc
-                ‖MvPowerSeries.coeff e f.1 * c⁻¹‖ = ‖MvPowerSeries.coeff e f.1‖ * ‖c‖⁻¹ := by
-                  rw [norm_mul, norm_inv]
                 _ ≤ ‖f‖ * ‖c‖⁻¹ := by
                   gcongr
                   exact TateAlgebra.coeff_norm_le f e
                 _ = 1 := by
                   rw [he₀]
                   field_simp [norm_ne_zero_iff.mpr hfne]
-            have hnorm_le : ‖f₁‖ ≤ 1 :=
-              norm_le_of_forall_coeff_le f₁ (by positivity) hcoeff_le
+            have hnorm_le : ‖f₁‖ ≤ 1 := norm_le_of_forall_coeff_le f₁ (by positivity) hcoeff_le
             have hone_le : 1 ≤ ‖f₁‖ := by
               rw [← hcoeff_e₀]
               exact TateAlgebra.coeff_norm_le f₁ e₀
@@ -3452,10 +3363,7 @@ theorem noether_normalization_drop {n : ℕ} (φ : TateAlgebra (Fin (n + 1)) k �
     (RingEquiv.ofBijective (optionTriangularInverse k d hd) hbij₂).finite
   have hopt_mul (f g : TateAlgebra (Option (Fin n)) k) :
       optionToTate (f * g) = optionToTate f * optionToTate g := by
-    calc
-      optionToTate (f * g) = optionToTate (tateToOption (optionToTate f * optionToTate g)) := by
-        rw [tateToOption_optionToTate_mul f g]
-      _ = optionToTate f * optionToTate g := by simp [optionToTate_tateToOption]
+    simp [← tateToOption_optionToTate_mul f g, optionToTate_tateToOption]
   have coeff_rename_some (a : TateAlgebra (Fin n) k) (e : Option (Fin n) →₀ ℕ) :
       (MvPowerSeries.coeff e) ((MvPowerSeries.rename some) (a : MvPowerSeries (Fin n) k)) =
         if e none = 0 then (MvPowerSeries.coeff e.some) (a : MvPowerSeries (Fin n) k) else 0 := by
