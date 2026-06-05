@@ -22,25 +22,16 @@ variable {σ : Type*} (s : σ) {k : Type*} [NormedField k] [CompleteSpace k] [Is
   {A B : Type*} [NormedCommRing A] [NormedAlgebra k A]
   [IsStrictAffinoid k A] [NormedCommRing B] [NormedAlgebra k B] [IsStrictAffinoid k B]
 
-lemma continuous_of_contractive {C D : Type*} [NormedRing C] [NormedRing D]
-    (g : C →+* D) (hg : IsContractiveHom g) : Continuous g := by
-  have hLip : LipschitzWith 1 g := by
-    intro x y
-    simpa [edist_dist, dist_eq_norm] using ENNReal.ofReal_le_ofReal (hg (x - y))
-  exact hLip.continuous
-
 omit [IsUltrametricDist k] [CompleteSpace k] in
 lemma base_norm_eq_one_of_trivially_valued
-    (htv : ¬ ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1) {x : k} (hx : x ≠ 0) : ‖x‖ = 1 := by
-  by_contra h
-  exact htv ⟨x, hx, h⟩
+    (htv : ¬ ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1) {x : k} (hx : x ≠ 0) : ‖x‖ = 1 :=
+  of_not_not fun h ↦ htv ⟨x, hx, h⟩
 
 omit [CompleteSpace k] in
 lemma TateAlgebra.norm_eq_one_of_trivially_valued
     (htv : ¬ ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1) {F : TateAlgebra σ k} (hF : F ≠ 0) : ‖F‖ = 1 := by
   have hle : ‖F‖ ≤ 1 := by
-    refine ciSup_le ?_
-    intro e
+    refine ciSup_le fun e ↦ ?_
     by_cases h : MvPowerSeries.coeff e F.1 = 0
     · simp [h]
     · exact le_of_eq (base_norm_eq_one_of_trivially_valued htv h)
@@ -48,90 +39,48 @@ lemma TateAlgebra.norm_eq_one_of_trivially_valued
     by_contra h
     push Not at h
     apply hF
-    apply Subtype.ext
-    apply MvPowerSeries.ext
-    intro e
+    ext e
     exact h e
-  have hge : 1 ≤ ‖F‖ := by
-    rw [← base_norm_eq_one_of_trivially_valued htv he]
-    exact TateAlgebra.coeff_norm_le F e
-  exact le_antisymm hle hge
+  exact le_antisymm hle <| by
+    grw [← TateAlgebra.coeff_norm_le F e, base_norm_eq_one_of_trivially_valued htv he]
 
 lemma IsStrictAffinoid.norm_eq_one_of_trivially_valued
     (htv : ¬ ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1) {a : A} (ha : a ≠ 0) : ‖a‖ = 1 := by
   rcases IsStrictAffinoid.presentation k A with ⟨σ, _, φ, hφ, hsurj⟩
   rcases hφ with ⟨C, hCpos, hφ⟩
   obtain ⟨x, rfl⟩ := hsurj a
-  have hx0 : x ≠ 0 := by
-    intro hx0
-    exact ha (by simp [hx0])
   let Q (y : A) : Set ℝ := {r : ℝ | ∃ z : TateAlgebra σ k, φ z = y ∧ ‖z‖ = r}
+  have hpn {y : A} (hy : y ≠ 0) {z : TateAlgebra σ k} (hz : φ z = y) : z ≠ 0 :=
+    fun hz0 ↦ hy (by simp [hz0, ← hz])
   have hQ_eq_singleton {y : A} (hy : y ≠ 0) : Q y = {1} := by
     ext r
     constructor
-    · intro hr
-      rcases hr with ⟨z, hz, rfl⟩
-      have hz0 : z ≠ 0 := by
-        intro hz0
-        exact hy (by simpa [hz0] using hz.symm)
-      simp [TateAlgebra.norm_eq_one_of_trivially_valued htv hz0]
-    · intro hr
-      rw [Set.mem_singleton_iff] at hr
+    · rintro ⟨z, hz, rfl⟩
+      simp [TateAlgebra.norm_eq_one_of_trivially_valued htv (hpn hy hz)]
+    · rintro rfl
       obtain ⟨z, hz⟩ := hsurj y
-      have hz0 : z ≠ 0 := by
-        intro hz0
-        exact hy (by simpa [hz0] using hz.symm)
-      refine ⟨z, hz, ?_⟩
-      simpa [hr] using
-        (TateAlgebra.norm_eq_one_of_trivially_valued htv hz0)
+      exact ⟨z, hz, TateAlgebra.norm_eq_one_of_trivially_valued htv (hpn hy hz)⟩
   have hxnpow_ne_zero (n : ℕ) : (φ x) ^ n ≠ 0 := by
-    intro hzero
-    have hnorm0 : ‖(φ x) ^ n‖ = 0 := by simp [hzero]
-    have hnormpos : 0 < ‖(φ x) ^ n‖ := by
-      rw [IsStrictAffinoid.withSpectralNorm k n (φ x)]
-      exact pow_pos (norm_pos_iff.mpr ha) _
-    exact hnormpos.ne' hnorm0
+    rw [← norm_pos_iff]
+    simpa [IsStrictAffinoid.withSpectralNorm k] using pow_pos (norm_pos_iff.mpr ha) n
   have hnot_gt : ¬ 1 < ‖φ x‖ := by
     intro hgt
     obtain ⟨n, hn⟩ := pow_unbounded_of_one_lt C hgt
     obtain ⟨z, hz⟩ := hsurj ((φ x) ^ n)
-    have hz0 : z ≠ 0 := by
-      intro hz0
-      exact hxnpow_ne_zero n (by simpa [hz0] using hz.symm)
-    have hz1 : ‖z‖ = 1 :=
-      TateAlgebra.norm_eq_one_of_trivially_valued htv hz0
-    have hpow :
-        ‖(φ x) ^ n‖ = ‖φ x‖ ^ n := by
-      simpa using IsStrictAffinoid.withSpectralNorm k n (φ x)
-    have hbound : ‖(φ x) ^ n‖ ≤ C := by
-      have h1 : ‖(φ x) ^ n‖ = ‖φ z‖ := by simp [hz]
-      have h2 : ‖φ z‖ ≤ C * ‖z‖ := (hφ z).2
-      have h3 : C * ‖z‖ = C := by simp [hz1]
-      exact h1.trans_le (h2.trans_eq h3)
-    have : ‖φ x‖ ^ n ≤ C := by simpa [hpow] using hbound
+    have : ‖φ x‖ ^ n ≤ C := by
+      grw [← IsStrictAffinoid.withSpectralNorm k (φ x) n, ← hz, (hφ z).2,
+        TateAlgebra.norm_eq_one_of_trivially_valued htv (hpn (hxnpow_ne_zero n) hz), mul_one]
     exact (not_lt_of_ge this) hn
   have hnot_lt : ¬ ‖φ x‖ < 1 := by
     intro hlt
     obtain ⟨n, hn⟩ := exists_pow_lt_of_lt_one (show 0 < C⁻¹ by positivity) hlt
     obtain ⟨z, hz⟩ := hsurj ((φ x) ^ n)
-    have hφz1 := (hφ z).1
-    have hz0 : z ≠ 0 := by
-      intro hz0
-      exact hxnpow_ne_zero n (by simpa [hz0] using hz.symm)
-    have hz1 : ‖z‖ = 1 :=
-      TateAlgebra.norm_eq_one_of_trivially_valued htv hz0
-    have hQ : sInf (Q ((φ x) ^ n)) = 1 := by
-      simp [hQ_eq_singleton (hxnpow_ne_zero n)]
-    have hpow : ‖(φ x) ^ n‖ = ‖φ x‖ ^ n := IsStrictAffinoid.withSpectralNorm k n (φ x)
-    have hsInf_le : sInf (Q ((φ x) ^ n)) ≤ C * ‖φ x‖ ^ n := by simpa [Q, hz, hpow] using hφz1
-    have : 1 ≤ C * ‖φ x‖ ^ n := by simpa [hQ] using hsInf_le
+    have hcn : 1 ≤ C * ‖φ x‖ ^ n := by
+      simpa [hQ_eq_singleton (hxnpow_ne_zero n), Q, hz, withSpectralNorm k (φ x) n] using (hφ z).1
     have hlt1 : C * ‖φ x‖ ^ n < 1 := by
-      have hmul : C * ‖φ x‖ ^ n < C * C⁻¹ := mul_lt_mul_of_pos_left hn hCpos
-      simpa [mul_inv_cancel₀ hCpos.ne'] using hmul
-    exact (not_lt_of_ge this) hlt1
-  have hle : ‖φ x‖ ≤ 1 := le_of_not_gt hnot_gt
-  have hge : 1 ≤ ‖φ x‖ := le_of_not_gt hnot_lt
-  exact le_antisymm hle hge
+      simpa [mul_inv_cancel₀ hCpos.ne'] using mul_lt_mul_of_pos_left hn hCpos
+    exact (not_lt_of_ge hcn) hlt1
+  exact le_antisymm (le_of_not_gt hnot_gt) (le_of_not_gt hnot_lt)
 
 section closed_ideals
 
@@ -151,29 +100,20 @@ lemma closure_denseSubtype {k A : Type*} [NontriviallyNormedField k] [Seminormed
       constructor
       · rintro ⟨y, hy, rfl⟩
         exact hy
-      · intro ha
-        refine ⟨⟨a, ?_⟩, ha, rfl⟩
-        exact subset_closure ha
-    rw [himage]
-    exact x.2
+      · exact fun ha ↦ ⟨⟨a, subset_closure ha⟩, ha, rfl⟩
+    simp [himage]
 
 private lemma isClosed_of_isStrictAffinoid_of_nontriviallyNormed (k : Type*)
     [NontriviallyNormedField k] [CompleteSpace k] [IsUltrametricDist k]
     {A : Type*} [NormedCommRing A] [NormedAlgebra k A] [IsStrictAffinoid k A] (I : Ideal A) :
     IsClosed (I : Set A) := by
   have : IsNoetherianRing A := IsStrictAffinoid.isNoetherianRing k A
-  have hI_fg : I.closure.FG := IsNoetherian.noetherian I.closure
-  rcases Submodule.fg_def.mp hI_fg with ⟨S, hSfin, hspan⟩
+  rcases Submodule.fg_def.mp (IsNoetherian.noetherian I.closure) with ⟨S, hSfin, hspan⟩
   have : Fintype S := hSfin.fintype
-  have hclosedClosure : IsClosed (I.closure : Set A) := by
-    simp [Ideal.coe_closure]
-  have : IsClosed (((I.closure.restrictScalars k : Submodule k A) : Set A)) := by
-    exact hclosedClosure
-  have : CompleteSpace (I.closure.restrictScalars k) := by
-    let s : Set A := ((I.closure.restrictScalars k : Submodule k A) : Set A)
-    infer_instance
+  have hclosedClosure : IsClosed (I.closure : Set A) := by simp [Ideal.coe_closure]
+  have : IsClosed (((I.closure.restrictScalars k : Submodule k A) : Set A)) := hclosedClosure
   let ψ : (S → A) →ₗ[A] A :=
-    { toFun := fun v => ∑ s, v s * (s : A)
+    { toFun := fun v ↦ ∑ s, v s * (s : A)
       map_add' := by
         intro v w
         simp [add_mul, Finset.sum_add_distrib]
@@ -182,181 +122,100 @@ private lemma isClosed_of_isStrictAffinoid_of_nontriviallyNormed (k : Type*)
         simp [smul_eq_mul, Finset.mul_sum, mul_assoc] }
   have hψrange : LinearMap.range ψ = I.closure := by
     refine le_antisymm ?_ ?_
-    · intro x hx
-      rcases hx with ⟨v, rfl⟩
-      rw [← hspan]
-      change ∑ s ∈ Finset.univ, v s * (s : A) ∈ Ideal.span S
-      exact Ideal.sum_mem _ fun s hs => Ideal.mul_mem_left _ _ (Ideal.subset_span s.2)
+    · rintro _ ⟨v, rfl⟩
+      simp [ψ, ← hspan, Ideal.sum_mem _ fun _ _ ↦ Ideal.mul_mem_left _ _ (Ideal.subset_span _)]
     · classical
       rw [← hspan]
-      refine Ideal.span_le.2 ?_
-      intro x hx
-      refine ⟨fun t => if t = ⟨x, hx⟩ then 1 else 0, ?_⟩
-      simp [ψ]
+      exact Ideal.span_le.2 fun x hx ↦ ⟨fun t ↦ if t = ⟨x, hx⟩ then 1 else 0, by simp [ψ]⟩
   let φA : (S → A) →L[k] A :=
     { toLinearMap := ψ.restrictScalars k
-      cont := by
-        have hcont (s : S) : Continuous fun v : S → A => v s * (s : A) :=
-          (continuous_apply s).mul continuous_const
-        simpa using continuous_finset_sum (Finset.univ) (fun s _ => hcont s) }
+      cont := continuous_finsetSum Finset.univ fun s _ ↦ (continuous_apply s).mul continuous_const }
   let φ : (S → A) →L[k] (I.closure.restrictScalars k) :=
-    φA.codRestrict (I.closure.restrictScalars k) (by
-      intro v
-      show φA v ∈ I.closure
-      rw [← hψrange]
-      exact ⟨v, rfl⟩)
-  have hφsurj : Function.Surjective φ := by
-    intro y
-    have hy : (y : A) ∈ LinearMap.range ψ := by
-      rw [hψrange]
-      exact y.2
-    rcases hy with ⟨v, hv⟩
-    refine ⟨v, ?_⟩
-    ext
-    exact hv
-  have hDdense : Dense {x : I.closure.restrictScalars k | x.1 ∈ I} :=
-    closure_denseSubtype I
+    φA.codRestrict (I.closure.restrictScalars k) fun v ↦ by
+      simpa [φA, hψrange] using show ψ v ∈ LinearMap.range ψ from ⟨v, rfl⟩
+  have hφsurj : Function.Surjective φ := fun y ↦ by
+    obtain ⟨v, hv⟩ : y.1 ∈ LinearMap.range ψ := by simp [hψrange]
+    exact ⟨v, Subtype.ext hv⟩
+  have hDdense : Dense {x : I.closure.restrictScalars k | x.1 ∈ I} := closure_denseSubtype I
   let r : ℝ := ((Fintype.card S : ℝ) + 1)⁻¹
-  have hrpos : 0 < r := by
-    dsimp [r]
-    positivity
+  have hrpos : 0 < r := by positivity
   obtain ⟨c, hcpos, hcr⟩ := NormedField.exists_norm_lt k hrpos
   have hcardr_lt : (Fintype.card S : ℝ) * r < 1 := by
-    have hden : 0 < (Fintype.card S : ℝ) + 1 := by positivity
-    have hlt : (Fintype.card S : ℝ) < (Fintype.card S : ℝ) + 1 := by linarith
-    simpa [r, div_eq_mul_inv] using (div_lt_one hden).2 hlt
-  have hcardc_lt : (Fintype.card S : ℝ) * ‖c‖ < 1 := by
-    have hcard_nonneg : 0 ≤ (Fintype.card S : ℝ) := by positivity
-    have hle : (Fintype.card S : ℝ) * ‖c‖ ≤ (Fintype.card S : ℝ) * r := by
-      gcongr
-    exact lt_of_le_of_lt hle hcardr_lt
-  let g : S → I.closure.restrictScalars k := fun s => ⟨s, by
-    rw [← hspan]
-    exact Ideal.subset_span s.2⟩
-  have hφopen : IsOpenMap φ :=
-    let hcodom : CompleteSpace (I.closure.restrictScalars k) := inferInstance
-    @ContinuousLinearMap.isOpenMap k k _ _ (RingHom.id k) (S → A) _ _
-      (I.closure.restrictScalars k) _ _ φ (RingHom.id k)
-        inferInstance inferInstance inferInstance hcodom inferInstance hφsurj
+    simpa [r, div_eq_mul_inv] using (div_lt_one (by positivity)).2 (by linarith)
+  have hcardc_lt : (Fintype.card S : ℝ) * ‖c‖ < 1 := lt_of_le_of_lt (by gcongr) hcardr_lt
+  let g : S → I.closure.restrictScalars k :=
+    fun s ↦ ⟨s, by simpa [← hspan] using Ideal.subset_span s.2⟩
   let W : Set (I.closure.restrictScalars k) := φ '' Metric.ball (0 : S → A) ‖c‖
-  have hWopen : IsOpen W := hφopen _ Metric.isOpen_ball
-  have hW0 : (0 : I.closure.restrictScalars k) ∈ W := by
-    refine ⟨0, ?_, by simp [φ]⟩
-    simp [Metric.mem_ball, hcpos]
-  have happrox (s : S) :
-      ∃ y : I.closure.restrictScalars k, y.1 ∈ I ∧
-        ∃ u : S → A, ‖u‖ < ‖c‖ ∧ φ u = g s - y := by
+  have hWopen : IsOpen W := (ContinuousLinearMap.isOpenMap φ hφsurj) _ Metric.isOpen_ball
+  have hW0 : (0 : I.closure.restrictScalars k) ∈ W :=
+    ⟨0, by simp [Metric.mem_ball, hcpos], by simp [φ]⟩
+  have happrox (s : S) : ∃ y : I.closure.restrictScalars k, y.1 ∈ I ∧
+      ∃ u : S → A, ‖u‖ < ‖c‖ ∧ φ u = g s - y := by
     let U : Set (I.closure.restrictScalars k) := {x | g s - x ∈ W}
     have hUopen : IsOpen U := hWopen.preimage (continuous_const.sub continuous_id)
     have hUnonempty : U.Nonempty := ⟨g s, by simp [U, hW0]⟩
-    rcases hDdense.inter_open_nonempty U hUopen hUnonempty with ⟨y, hy⟩
-    rcases hy.1 with ⟨u, hu, hu_eq⟩
-    exact ⟨y, hy.2, u, by simpa [Metric.mem_ball] using hu, hu_eq⟩
+    rcases hDdense.inter_open_nonempty U hUopen hUnonempty with ⟨y, ⟨u, hu, hu_eq⟩, hyI⟩
+    exact ⟨y, hyI, u, by simpa [Metric.mem_ball] using hu, hu_eq⟩
   choose y hyI u hu_norm hu_eq using happrox
   let Tlin : (S → A) →ₗ[k] (S → A) :=
-    { toFun := fun v s => ∑ t, u s t * v t
-      map_add' := by
-        intro v w
+    { toFun := fun v s ↦ ∑ t, u s t * v t
+      map_add' _ _ := by
         ext s
         simp [mul_add, Finset.sum_add_distrib]
-      map_smul' := by
-        intro a v
+      map_smul' _ _ := by
         ext s
-        have hsum :
-            ∑ t, u s t * (a • v) t = ∑ t, a • (u s t * v t) := by
-          refine Finset.sum_congr rfl ?_
-          intro t ht
-          simp
-        have hsmul :
-            ∑ t, a • (u s t * v t) =
-              ((RingHom.id k) a • fun s : S => ∑ t, u s t * v t) s := by
-          simp [Pi.smul_apply, Finset.smul_sum]
-        exact hsum.trans hsmul }
+        simp [Pi.smul_apply, Finset.smul_sum] }
   have hTbound : ∀ v : S → A, ‖Tlin v‖ ≤ ((Fintype.card S : ℝ) * ‖c‖) * ‖v‖ := by
     intro v
     let C : ℝ := ((Fintype.card S : ℝ) * ‖c‖) * ‖v‖
-    have hC : 0 ≤ C := by
-      dsimp [C]
-      positivity
-    have hbound' : ∀ s ∈ Finset.univ, ‖Tlin v s‖₊ ≤ Real.toNNReal C := by
-      intro s hs
-      have hsreal : ‖Tlin v s‖ ≤ C := by
-        have hsum1 : ‖∑ t, u s t * v t‖ ≤ ∑ t, ‖u s t * v t‖ := norm_sum_le _ _
-        have hsum2 : (∑ t : S, ‖u s t * v t‖) ≤ ∑ t : S, ‖c‖ * ‖v‖ := by
-          refine Finset.sum_le_sum ?_
-          intro t ht
-          have hmul1 : ‖u s t * v t‖ ≤ ‖u s t‖ * ‖v t‖ := norm_mul_le _ _
-          have hmul2 : ‖u s t‖ * ‖v t‖ ≤ ‖c‖ * ‖v‖ := by
-            gcongr
-            · exact le_of_lt <| lt_of_le_of_lt (norm_le_pi_norm (u s) t) (hu_norm s)
-            · exact norm_le_pi_norm v t
-          exact le_trans hmul1 hmul2
-        have hsum3 : (∑ t : S, ‖c‖ * ‖v‖) = C := by simp [C, mul_assoc]
-        exact (le_trans hsum1 hsum2).trans_eq hsum3
-      exact (NNReal.coe_le_coe).mp (by simpa [Real.toNNReal_of_nonneg hC] using hsreal)
+    have hC : 0 ≤ C := by positivity
+    have hbound' (s : S) : ‖Tlin v s‖₊ ≤ Real.toNNReal C := by
+      simp only [Real.toNNReal_of_nonneg hC, ← NNReal.coe_le_coe, coe_nnnorm, NNReal.coe_mk]
+      have hsum2 : (∑ t : S, ‖u s t * v t‖) ≤ ∑ _ : S, ‖c‖ * ‖v‖ := by
+        refine Finset.sum_le_sum fun _ _ ↦ ?_
+        grw [norm_mul_le, norm_le_pi_norm, hu_norm, norm_le_pi_norm]
+      simp only [LinearMap.coe_mk, AddHom.coe_mk, Tlin]
+      grw [norm_sum_le, hsum2]
+      simp [C, mul_assoc]
     rw [Pi.norm_def]
-    have hsup : ↑(Finset.univ.sup fun b => ‖Tlin v b‖₊) ≤ ↑(Real.toNNReal C) := by
-      exact_mod_cast (Finset.sup_le_iff.mpr hbound')
-    change ↑(Finset.univ.sup fun b => ‖Tlin v b‖₊) ≤ C
+    change (Finset.univ.sup fun b ↦ ‖Tlin v b‖₊) ≤ C
     have hto : (↑(Real.toNNReal C) : ℝ) = C := by
       simp [Real.toNNReal_of_nonneg hC]
     rw [← hto]
-    exact hsup
-  let T : ((S → A) →L[k] (S → A)) :=
-    Tlin.mkContinuous ((Fintype.card S : ℝ) * ‖c‖) hTbound
-  have hTnorm : ‖T‖ ≤ (Fintype.card S : ℝ) * ‖c‖ := by
-    exact LinearMap.mkContinuous_norm_le Tlin (by positivity) hTbound
+    exact_mod_cast (Finset.sup_le_iff.mpr (fun s _ ↦ hbound' s))
+  let T : ((S → A) →L[k] (S → A)) := Tlin.mkContinuous ((Fintype.card S : ℝ) * ‖c‖) hTbound
+  have hTnorm : ‖T‖ ≤ (Fintype.card S : ℝ) * ‖c‖ :=
+    LinearMap.mkContinuous_norm_le Tlin (by positivity) hTbound
   let U : ((S → A) →L[k] (S → A))ˣ := Units.oneSub T (lt_of_le_of_lt hTnorm hcardc_lt)
   let Sinv : ((S → A) →L[k] (S → A)) := ↑(U⁻¹)
   have hT_Alinear (a : A) (v : S → A) : T (a • v) = a • T v := by
-    ext s
-    change ∑ t, u s t * (a * v t) = a * ∑ t, u s t * v t
-    have hsum : ∑ t, u s t * (a * v t) = ∑ t, a * (u s t * v t) := by
-      refine Finset.sum_congr rfl ?_
-      intro t ht
-      ring
-    rw [hsum, Finset.mul_sum]
+    ext
+    simp [T, Tlin, Finset.mul_sum, mul_left_comm]
   have hU_Alinear (a : A) (v : S → A) : (U : ((S → A) →L[k] (S → A))) (a • v) =
       a • (U : ((S → A) →L[k] (S → A))) v := by
     simp [U, hT_Alinear, sub_eq_add_neg]
   have hleft (v : S → A) : Sinv ((U : ((S → A) →L[k] (S → A))) v) = v := by
-    change ((↑(U⁻¹) : ((S → A) →L[k] (S → A))) (((U : ((S → A) →L[k] (S → A))) v))) = v
     rw [← ContinuousLinearMap.mul_apply]
-    exact congrArg (fun F : (S → A) →L[k] (S → A) => F v) (Units.inv_mul U)
+    exact congrArg (fun F : (S → A) →L[k] (S → A) ↦ F v) (Units.inv_mul U)
   have hright (v : S → A) : (U : ((S → A) →L[k] (S → A))) (Sinv v) = v := by
-    change ((U : ((S → A) →L[k] (S → A))) (((↑(U⁻¹) : ((S → A) →L[k] (S → A))) v))) = v
     rw [← ContinuousLinearMap.mul_apply]
-    exact congrArg (fun F : (S → A) →L[k] (S → A) => F v) (Units.mul_inv U)
-  have hU_inj : Function.Injective (U : ((S → A) →L[k] (S → A))) := by
-    intro v w hvw
-    have h := congrArg Sinv hvw
-    simpa [hleft v, hleft w] using h
-  have hSinv_Alinear (a : A) (v : S → A) : Sinv (a • v) = a • Sinv v := by
-    apply hU_inj
-    have h1 : (U : ((S → A) →L[k] (S → A))) (Sinv (a • v)) = a • v := hright (a • v)
-    have h2 : a • v = a • (U : ((S → A) →L[k] (S → A))) (Sinv v) := by rw [hright v]
-    have h3 : a • (U : ((S → A) →L[k] (S → A))) (Sinv v) =
-        (U : ((S → A) →L[k] (S → A))) (a • Sinv v) := by
-      symm
-      exact hU_Alinear a (Sinv v)
-    exact h1.trans (h2.trans h3)
+    exact congrArg (fun F : (S → A) →L[k] (S → A) ↦ F v) (Units.mul_inv U)
+  have hU_inj : Function.Injective (U : ((S → A) →L[k] (S → A))) := fun v w hvw ↦ by
+    simpa [hleft v, hleft w] using congrArg Sinv hvw
+  have hSinv_Alinear (a : A) (v : S → A) : Sinv (a • v) = a • Sinv v := hU_inj <| by
+    rw [hright (a • v), hU_Alinear a (Sinv v), hright v]
   let Slin : (S → A) →ₗ[A] (S → A) :=
     { toFun := Sinv
-      map_add' := by
-        intro v w
-        exact map_add Sinv v w
+      map_add' := map_add Sinv
       map_smul' := hSinv_Alinear }
   have hSlin_mem {v : S → A} (hv : ∀ s, v s ∈ I) : ∀ s, Slin v s ∈ I := by
     intro s
-    have hrepr : Slin v s = ∑ i, v i * Slin (Pi.basisFun A S i) s := by
-      have h := congrArg (fun w : S → A => Slin w s) ((Pi.basisFun A S).sum_repr v)
-      simpa using h.symm
-    rw [hrepr]
-    refine Ideal.sum_mem _ ?_
-    intro i hi
+    rw [← congrArg (fun w : S → A ↦ Slin w s) ((Pi.basisFun A S).sum_repr v)]
+    simp only [Pi.basisFun_repr, map_sum, map_smul, Finset.sum_apply, Pi.smul_apply, smul_eq_mul]
+    refine Ideal.sum_mem _ fun i _ ↦ ?_
     simpa [mul_comm] using Ideal.mul_mem_left I (Slin (Pi.basisFun A S i) s) (hv i)
-  let G : S → A := fun s => s
-  let Y : S → A := fun s => y s
+  let G : S → A := fun s ↦ s
+  let Y : S → A := fun s ↦ y s
   have hGY : (U : ((S → A) →L[k] (S → A))) G = Y := by
     ext s
     have hs : ∑ t, u s t * (t : A) = (s : A) - (y s : A) := by
@@ -365,26 +224,12 @@ private lemma isClosed_of_isStrictAffinoid_of_nontriviallyNormed (k : Type*)
       rw [hs]
       ring
     simpa [U, T, Tlin, G, Y] using hs'
-  have hSinvY_eq_G : Sinv Y = G := by
-    simpa [hGY] using hleft G
   have hGmem : ∀ s, G s ∈ I := by
-    have hYmem : ∀ s, Y s ∈ I := by
-      intro s
-      simpa [Y] using hyI s
-    have hSY : ∀ s, Slin Y s ∈ I := hSlin_mem hYmem
-    intro s
-    simpa [Slin, hSinvY_eq_G] using hSY s
+    have hSY : ∀ s, Slin Y s ∈ I := hSlin_mem hyI
+    simpa [Slin, show Sinv Y = G by simpa [hGY] using hleft G] using hSY
   have hclosure_le : I.closure ≤ I := by
-    rw [← hspan]
-    refine Ideal.span_le.2 ?_
-    intro x hx
-    exact hGmem ⟨x, hx⟩
-  have hI_le_closure : I ≤ I.closure := by
-    intro x hx
-    change x ∈ closure (I : Set A)
-    exact subset_closure hx
-  have hclosure_eq : I.closure = I := le_antisymm hclosure_le hI_le_closure
-  simpa [hclosure_eq] using hclosedClosure
+    grw [← hspan, ← Ideal.span_le.2 fun x hx ↦ hGmem ⟨x, hx⟩]
+  simpa [le_antisymm hclosure_le subset_closure] using hclosedClosure
 
 variable (k) in
 include k in
@@ -392,9 +237,7 @@ theorem isClosed_of_isStrictAffinoid (I : Ideal A) : IsClosed (I : Set A) := by
   by_cases htv : ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1
   · let : NontriviallyNormedField k := NontriviallyNormedField.ofNormNeOne htv
     exact isClosed_of_isStrictAffinoid_of_nontriviallyNormed k I
-  · have : DiscreteTopology A := by
-      refine DiscreteTopology.of_forall_le_norm zero_lt_one ?_
-      intro a ha
+  · have : DiscreteTopology A := DiscreteTopology.of_forall_le_norm zero_lt_one fun a ha ↦ by
       simp [IsStrictAffinoid.norm_eq_one_of_trivially_valued htv ha]
     simp
 
@@ -412,15 +255,11 @@ lemma TateAlgebra.not_exist_injective_to_field {K : Type*} [NormedCommRing K] [N
   let : Field (TateAlgebra (Fin (n + 1)) k) := (isField_of_isIntegral_of_isField hφinj hK).toField
   have hXne : (TateAlgebra.X 0 : TateAlgebra (Fin (n + 1)) k) ≠ 0 := by
     intro hX
-    have hcoeff := congrArg (fun F : TateAlgebra (Fin (n + 1)) k =>
-      MvPowerSeries.coeff (Finsupp.single 0 1) ((F : TateAlgebra (Fin (n + 1)) k) :
-        MvPowerSeries (Fin (n + 1)) k)) hX
-    simp [TateAlgebra.coe_X, MvPowerSeries.coeff_X] at hcoeff
-  have hXu : IsUnit (TateAlgebra.X 0 : TateAlgebra (Fin (n + 1)) k) := isUnit_iff_ne_zero.mpr hXne
-  have h0u : IsUnit (0 : k) := by
-    have hmap := hXu.map (TateAlgebra.constantCoeff)
-    simp [TateAlgebra.constantCoeff_apply] at hmap
-  exact (IsUnit.ne_zero h0u) rfl
+    simpa [TateAlgebra.coe_X, MvPowerSeries.coeff_X] using
+      congrArg (fun F ↦ MvPowerSeries.coeff (Finsupp.single 0 1) F.1) hX
+  exact (IsUnit.ne_zero (a := 0) <| by
+    simpa [TateAlgebra.constantCoeff_apply] using
+      (isUnit_iff_ne_zero.mpr hXne).map TateAlgebra.constantCoeff) rfl
 
 lemma TateAlgebra.module_finite_of_exist_finite_algHom_to_field {K : Type*} [NormedCommRing K]
     [NormedAlgebra k K] (hK : IsField K) (n : ℕ) (φ : TateAlgebra (Fin n) k →ₐ[k] K)
@@ -428,9 +267,7 @@ lemma TateAlgebra.module_finite_of_exist_finite_algHom_to_field {K : Type*} [Nor
   induction n with
   | zero =>
       let θ : k →ₐ[k] K := φ.comp finZeroAlgEquiv.symm.toAlgHom
-      have hθ : θ.toRingHom = algebraMap k K := by
-        ext x
-        exact θ.commutes x
+      have hθ : θ.toRingHom = algebraMap k K := RingHom.ext fun x ↦ θ.commutes x
       have : Algebra.IsIntegral k K := by
         rw [← algebraMap_isIntegral_iff, ← hθ]
         exact RingHom.IsIntegral.of_finite
@@ -455,18 +292,13 @@ variable (k)
 instance finiteDimensional_quotient_of_isMaximal (m : Ideal A) [m.IsMaximal] :
     FiniteDimensional k (A ⧸ m) := by
   let : Field (A ⧸ m) := Ideal.Quotient.field m
-  rcases IsStrictAffinoid.exists_fin_contractve_presentation k A with ⟨n, φ, hφcontr, hφsurj⟩
+  rcases IsStrictAffinoid.exists_fin_contractive_presentation k A with ⟨n, φ, hφcontr, hφsurj⟩
   let ψ : TateAlgebra (Fin n) k →ₐ[k] A ⧸ m := (Ideal.Quotient.mkₐ k m).comp φ
-  have hψcontr : IsContractiveHom ψ := by
-    intro x
-    exact le_trans (Ideal.Quotient.norm_mk_le m _) (hφcontr x)
-  have hψsurj : Function.Surjective ψ := by
-    intro y
-    obtain ⟨a, rfl⟩ := Ideal.Quotient.mkₐ_surjective k m y
-    obtain ⟨x, rfl⟩ := hφsurj a
-    exact ⟨x, rfl⟩
-  exact TateAlgebra.module_finite_of_exist_finite_algHom_to_field (Field.toIsField (A ⧸ m)) n ψ
-    hψcontr (AlgHom.Finite.of_surjective ψ hψsurj)
+  have hψcontr : IsContractiveHom ψ := fun x ↦ (Ideal.Quotient.norm_mk_le m _).trans (hφcontr x)
+  refine TateAlgebra.module_finite_of_exist_finite_algHom_to_field (Field.toIsField (A ⧸ m)) n ψ
+    hψcontr <| AlgHom.Finite.of_surjective ψ fun y ↦ ?_
+  obtain ⟨a, rfl⟩ := Ideal.Quotient.mkₐ_surjective k m y
+  exact Exists.imp (fun x hx ↦ by simp [ψ, hx]) (hφsurj a)
 
 /-- Let `a` be an ideal of a strictly `k`-affinoid algebra `A` such that its radical `rad a` is a
   maximal ideal. Then `A / a` is of finite dimension over `k`. -/
@@ -487,16 +319,13 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f := by
     have hfcont : Continuous f.toLinearMap := by
       apply LinearMap.continuous_of_seq_closed_graph
       intro u x y hx hy
-      have hux' : Tendsto (fun n => u n - x) atTop (𝓝 (x - x)) := Tendsto.sub hx tendsto_const_nhds
-      have hux : Tendsto (fun n => u n - x) atTop (𝓝 0) := by simpa using hux'
-      have huy : Tendsto (fun n => f (u n - x)) atTop (𝓝 (y - f x)) := by
-        simpa [map_sub] using
-          Tendsto.sub hy (tendsto_const_nhds : Tendsto (fun _ : ℕ => f x) atTop (𝓝 (f x)))
+      have hux : Tendsto (fun n ↦ u n - x) atTop (𝓝 0) := by simpa using hx.sub_const x
+      have huy : Tendsto (fun n ↦ f (u n - x)) atTop (𝓝 (y - f x)) := by
+        simpa [map_sub] using Tendsto.sub hy tendsto_const_nhds
       let z : B := y - f x
       have hzpow (m : Ideal B) (hm : m.IsMaximal) (n : ℕ) : z ∈ m ^ n.succ := by
         have hradmax : (m ^ n.succ).radical.IsMaximal := by
-          rw [Ideal.radical_pow m n.succ_ne_zero, Ideal.IsPrime.radical hm.isPrime]
-          exact hm
+          simp [Ideal.radical_pow m n.succ_ne_zero, hm.isPrime.radical, hm]
         let q : B →ₐ[k] B ⧸ m ^ n.succ := Ideal.Quotient.mkₐ k (m ^ n.succ)
         have hqz0 : q z = 0 := by
           by_contra hqz0
@@ -505,46 +334,35 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f := by
             Ideal.isClosed_of_isStrictAffinoid k (m ^ n.succ)
           have : IsClosed (I : Set A) := I.isClosed_of_isStrictAffinoid k
           let p : A →ₐ[k] A ⧸ I := Ideal.Quotient.mkₐ k I
-          have hIz (a : A) (ha: a ∈ I) : (q.comp f) a = 0 := Ideal.Quotient.eq_zero_iff_mem.2 ha
+          have hIz (a : A) (ha : a ∈ I) : (q.comp f) a = 0 := Ideal.Quotient.eq_zero_iff_mem.2 ha
           let F : A ⧸ I →ₐ[k] B ⧸ m ^ n.succ := Ideal.Quotient.liftₐ I (q.comp f) hIz
           have hker : RingHom.ker ((q.comp f)) = I := by
             ext a
             change ((Ideal.Quotient.mk (m ^ n.succ)) (f a) = 0) ↔ f a ∈ m ^ n.succ
             simp [Ideal.Quotient.eq_zero_iff_mem]
-          have hFinj : Function.Injective (Ideal.Quotient.lift I ((q.comp f).toRingHom) hIz) :=
-            (Ideal.injective_lift_iff hIz).2 hker
           have hF_inj : Function.Injective F := by
-            simpa [F, Ideal.Quotient.liftₐ] using hFinj
+            simpa [F, Ideal.Quotient.liftₐ] using (Ideal.injective_lift_iff hIz).2 hker
           have : FiniteDimensional k (A ⧸ I) := FiniteDimensional.of_injective F.toLinearMap hF_inj
           let b := Module.Basis.ofVectorSpace k (B ⧸ m ^ n.succ)
           obtain ⟨i, hi⟩ : ∃ i, b.repr (q z) i ≠ 0 := by
             by_contra h
             push Not at h
-            apply hqz0
-            apply b.repr.injective
-            ext j
-            simpa using h j
+            exact hqz0 <| b.repr.injective <| by
+              ext j
+              simpa using h j
           let l : (B ⧸ m ^ n.succ) →ₗ[k] k := b.coord i
-          have hpcont : Continuous p.toLinearMap :=
-            continuous_of_contractive p.toRingHom (fun a => Ideal.Quotient.norm_mk_le I a)
-          have hqcont : Continuous q.toLinearMap :=
-            continuous_of_contractive q.toRingHom (fun b => Ideal.Quotient.norm_mk_le _ b)
-          have hFcont : Continuous F.toLinearMap := F.toLinearMap.continuous_of_finiteDimensional
           have hlcont : Continuous l := LinearMap.continuous_of_finiteDimensional l
-          have hFp : F.comp p = q.comp f := Ideal.Quotient.liftₐ_comp I (q.comp f) hIz
           let g : A →ₗ[k] k := (l.comp F.toLinearMap).comp p.toLinearMap
           let h : B →ₗ[k] k := l.comp q.toLinearMap
-          have hgcont : Continuous g := (hlcont.comp hFcont).comp hpcont
-          have hhcont : Continuous h := hlcont.comp hqcont
-          have hgf : ∀ a : A, g a = h (f a) := by
-            intro a
-            have hFpa : F (p a) = q (f a) := congrArg (fun φ : A →ₐ[k] B ⧸ m ^ n.succ => φ a) hFp
-            exact congrArg l hFpa
-          have ht0g : Tendsto (fun j => g (u j - x)) atTop (𝓝 0) := by
-            change Tendsto (g ∘ fun j => u j - x) atTop (𝓝 0)
-            have hg0 : g 0 = 0 := by simp [g]
-            simpa [hg0] using Tendsto.comp (Continuous.tendsto hgcont 0) hux
-          have htz : Tendsto (fun j => h (f (u j - x))) atTop (𝓝 (l (q z))) :=
+          have hgcont : Continuous g :=
+            (hlcont.comp F.toLinearMap.continuous_of_finiteDimensional).comp <|
+              IsContractiveHom.continuous (fun a ↦ Ideal.Quotient.norm_mk_le I a)
+          have hhcont : Continuous h := hlcont.comp <|
+            IsContractiveHom.continuous (fun b ↦ Ideal.Quotient.norm_mk_le _ b)
+          have ht0g : Tendsto (fun j ↦ g (u j - x)) atTop (𝓝 0) := by
+            change Tendsto (g ∘ fun j ↦ u j - x) atTop (𝓝 0)
+            simpa [g] using Tendsto.comp (Continuous.tendsto hgcont 0) hux
+          have htz : Tendsto (fun j ↦ h (f (u j - x))) atTop (𝓝 (l (q z))) :=
             Tendsto.comp (Continuous.tendsto hhcont z) huy
           exact hi (tendsto_nhds_unique htz ht0g)
         exact Ideal.Quotient.eq_zero_iff_mem.1 hqz0
@@ -558,8 +376,7 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f := by
             simp [add_mul, ha, hb]
           smul_mem' := by
             intro a b hb
-            change a * b * z = 0
-            rw [mul_assoc, hb, mul_zero] }
+            simpa [mul_assoc] using congrArg (fun x ↦ a * x) hb }
       have hAnn_top : Ann = ⊤ := by
         by_contra hAnn
         obtain ⟨m, hm, hAnnm⟩ := Ideal.exists_le_maximal Ann hAnn
@@ -572,24 +389,16 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f := by
         have hzinf' : z ∈ (⨅ i : ℕ, m ^ i • (⊤ : Submodule B B) : Submodule B B) := by
           simpa [smul_eq_mul, ← Ideal.one_eq_top, mul_one] using hzinf
         obtain ⟨r, hr⟩ := (m.mem_iInf_smul_pow_eq_bot_iff z).mp hzinf'
-        have hr' : (r : B) * z = z := by
-          simpa [smul_eq_mul] using hr
-        have h1rz : (1 - (r : B)) ∈ Ann := by
-          change (1 - (r : B)) * z = 0
-          rw [sub_mul, one_mul, hr', sub_self]
+        have hr' : (r : B) * z = z := by simpa [smul_eq_mul] using hr
+        have h1rz : (1 - (r : B)) ∈ Ann := by simp [Ann, sub_mul, hr']
         have h1rm : (1 - (r : B)) ∈ m := hAnnm h1rz
         have hnot : (1 - (r : B)) ∉ m := by
           intro hmem
           have h1 : (1 : B) ∈ m := by
-            have hs : (1 - (r : B)) + r ∈ m := m.add_mem hmem r.2
-            simpa [sub_eq_add_neg, add_assoc, add_left_comm, add_comm] using hs
+            simpa [sub_eq_add_neg, add_assoc, add_left_comm, add_comm] using m.add_mem hmem r.2
           exact (Ideal.ne_top_iff_one m).1 hm.ne_top h1
         exact hnot h1rm
-      have hz0 : z = 0 := by
-        have h1ann : (1 : B) ∈ Ann := by simp [hAnn_top]
-        have h1ann' : (1 : B) * z = 0 := h1ann
-        simpa [one_mul] using h1ann'
-      exact sub_eq_zero.mp hz0
+      exact sub_eq_zero.mp <| by simpa [Ann] using (show (1 : B) ∈ Ann by simp [hAnn_top])
     let g : A →L[k] B := { toLinearMap := f.toLinearMap, cont := hfcont }
     have hg_bound (a : A) : ‖f a‖ ≤ ‖g‖ * ‖a‖ := g.le_opNorm a
     intro a
@@ -601,100 +410,74 @@ lemma isContractiveHom (f : A →ₐ[k] B) : IsContractiveHom f := by
       have hratio : 1 < ‖f a‖ / ‖a‖ := (one_lt_div hnorma_pos).2 hlt
       obtain ⟨n, hn⟩ := pow_unbounded_of_one_lt ‖g‖ hratio
       have hboundn : ‖f a‖ ^ n ≤ ‖g‖ * ‖a‖ ^ n := by
-        have h1 : ‖f a‖ ^ n = ‖(f a) ^ n‖ := (IsStrictAffinoid.withSpectralNorm k n (f a)).symm
-        have h2 : ‖(f a) ^ n‖ = ‖f (a ^ n)‖ := by simp
-        have h3 : ‖f (a ^ n)‖ ≤ ‖g‖ * ‖a ^ n‖ := hg_bound (a ^ n)
-        have h4 : ‖g‖ * ‖a ^ n‖ = ‖g‖ * ‖a‖ ^ n := by rw [IsStrictAffinoid.withSpectralNorm k n a]
-        exact h1.trans_le (h2.trans_le (h3.trans_eq h4))
-      have hapos_pow : 0 < ‖a‖ ^ n := pow_pos hnorma_pos _
+        grw [← withSpectralNorm k, ← map_pow, hg_bound (a ^ n), withSpectralNorm k]
       have hmul : (‖f a‖ / ‖a‖) ^ n * ‖a‖ ^ n = ‖f a‖ ^ n := by
         rw [div_pow]
         field_simp [pow_ne_zero n hnorma_pos.ne']
-      have hcontr : ‖g‖ * ‖a‖ ^ n < ‖f a‖ ^ n := by
-        have hm := mul_lt_mul_of_pos_right hn hapos_pow
-        simpa [hmul] using hm
-      exact (not_lt_of_ge hboundn) hcontr
+      exact (not_lt_of_ge hboundn) (by
+        simpa [hmul] using mul_lt_mul_of_pos_right hn (pow_pos hnorma_pos n))
   · intro a
     by_cases ha : a = 0
     · simp [ha]
-    · by_cases hfa : f a = 0
-      · simp [hfa]
-      · rw [IsStrictAffinoid.norm_eq_one_of_trivially_valued htv hfa]
-        rw [IsStrictAffinoid.norm_eq_one_of_trivially_valued htv ha]
+    · refine (eq_or_ne (f a) 0).elim (fun hfa ↦ by simp [hfa]) (fun hfa ↦ ?_)
+      rw [norm_eq_one_of_trivially_valued htv hfa, norm_eq_one_of_trivially_valued htv ha]
 
 variable (k A B) in
 theorem isBoundedSMul [Algebra A B] [IsScalarTower k A B] : IsBoundedSMul A B := by
   refine IsBoundedSMul.of_norm_smul_le <| fun a b ↦ ?_
-  calc _ = ‖algebraMap A B a * b‖ := by rw [Algebra.smul_def]
-    _ ≤ ‖algebraMap A B a‖ * ‖b‖ := norm_mul_le _ _
-    _ ≤ ‖a‖ * ‖b‖ := by
-      gcongr
-      exact isContractiveHom (IsScalarTower.toAlgHom k A B) a
+  grw [Algebra.smul_def, norm_mul_le]
+  gcongr
+  exact isContractiveHom (IsScalarTower.toAlgHom k A B) a
 
 end isContractiveHom
 
-section NontriviallyNormedField
+abbrev _root_.preImageNormSet {A B F : Type*} [SeminormedRing A] [SeminormedRing B] [FunLike F A B]
+    [RingHomClass F A B] (f : F) (b : B) : Set ℝ :=
+  {r : ℝ | ∃ a : A, f a = b ∧ ‖a‖ = r}
 
-variable {k : Type*} [NontriviallyNormedField k] [CompleteSpace k] [IsUltrametricDist k]
-  {A B : Type*} [NormedCommRing A] [NormedAlgebra k A]
-  [IsStrictAffinoid k A] [NormedCommRing B] [NormedAlgebra k B] [IsStrictAffinoid k B]
+theorem _root_.bddBelow_preImageNormSet {A B F : Type*} [SeminormedRing A] [SeminormedRing B]
+    [FunLike F A B] [RingHomClass F A B] (f : F) (b : B) : BddBelow (preImageNormSet f b) :=
+  ⟨0, fun r ⟨a, _, hnorm⟩ ↦ by grw [← hnorm, norm_nonneg a]⟩
 
 /-- Any surjective morphism between strict affinoid algebras is admissible. -/
-theorem admissible_of_surjective (f : A →ₐ[k] B)
-    (hf : Function.Surjective f) : IsAdmissibleHom f := by
-  let g : A →L[k] B := f.toLinearMap.mkContinuous 1 <|
-    fun x => by simpa using (IsStrictAffinoid.isContractiveHom f x)
-  obtain ⟨C, hCpos, hC⟩ := ContinuousLinearMap.exists_preimage_norm_le g hf
-  refine ⟨max C 1, lt_of_lt_of_le zero_lt_one (le_max_right C 1), ?_⟩
-  intro x
-  constructor
-  · change sInf {r : ℝ | ∃ a : A, f a = f x ∧ ‖a‖ = r} ≤ max C 1 * ‖f x‖
-    let Q : Set ℝ := {r : ℝ | ∃ a : A, f a = f x ∧ ‖a‖ = r}
-    have hQbdd : BddBelow Q := by
-      refine ⟨0, ?_⟩
-      intro r hr
-      rcases hr with ⟨a, -, rfl⟩
-      exact norm_nonneg _
-    obtain ⟨a, haeq, ha_bound⟩ := hC (f x)
-    have hmem : ‖a‖ ∈ Q := by
-      refine ⟨a, ?_, rfl⟩
-      simpa [g, LinearMap.mkContinuous_apply] using haeq
-    exact (csInf_le hQbdd hmem).trans <| ha_bound.trans <| by
-      gcongr
-      exact le_max_left C 1
-  · change ‖f x‖ ≤ max C 1 * ‖x‖
-    calc
-      ‖f x‖ ≤ 1 * ‖x‖ := by simpa using (IsStrictAffinoid.isContractiveHom f x)
-      _ ≤ max C 1 * ‖x‖ := by
-        gcongr
-        exact le_max_right C 1
-
-end NontriviallyNormedField
+theorem isAdmissibleHom_of_surjective {f : A →ₐ[k] B} (hf : Function.Surjective f) :
+    IsAdmissibleHom f := by
+  by_cases htv : ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1
+  · let : NontriviallyNormedField k := NontriviallyNormedField.ofNormNeOne htv
+    let g : A →L[k] B := f.toLinearMap.mkContinuous 1 <|
+      fun x ↦ by simpa using (IsStrictAffinoid.isContractiveHom f x)
+    obtain ⟨C, -, hC⟩ := ContinuousLinearMap.exists_preimage_norm_le g hf
+    refine ⟨max C 1, lt_of_lt_of_le zero_lt_one (le_max_right C 1), ?_⟩
+    intro x
+    constructor
+    · obtain ⟨a, haeq, ha_bound⟩ := hC (f x)
+      have hmem : ‖a‖ ∈ preImageNormSet f (f x) :=
+        ⟨a, by simpa [g, LinearMap.mkContinuous_apply] using haeq, rfl⟩
+      grw [csInf_le (bddBelow_preImageNormSet f (f x)) hmem, ha_bound,
+        mul_le_mul_of_nonneg_right (le_max_left C 1) (norm_nonneg _)]
+    · exact (IsStrictAffinoid.isContractiveHom f x).trans <| by
+        nth_rw 1 [← one_mul ‖x‖]
+        grw [mul_le_mul_of_nonneg_right (le_max_right C 1) (norm_nonneg x)]
+  · refine ⟨1, zero_lt_one, ?_⟩
+    intro x
+    have hQbdd : BddBelow (preImageNormSet f (f x)) := bddBelow_preImageNormSet f (f x)
+    constructor
+    · by_cases hfx : f x = 0
+      · grw [csInf_le hQbdd ⟨0, by simp [hfx], rfl⟩, norm_zero, hfx, norm_zero, mul_zero]
+      · have hx_le_one : ‖x‖ ≤ 1 := by
+          by_cases hx : x = 0
+          · simp [hx]
+          · exact (IsStrictAffinoid.norm_eq_one_of_trivially_valued htv hx).le
+        grw [csInf_le hQbdd ⟨x, rfl, rfl⟩, IsStrictAffinoid.norm_eq_one_of_trivially_valued htv hfx]
+        grw [mul_one, hx_le_one]
+    · grw [IsStrictAffinoid.isContractiveHom f x, one_mul]
 
 lemma _root_.TateAlgebra.hom_ext {σ : Type*} [Finite σ] {f g : TateAlgebra σ k →ₐ[k] A}
     (h : ∀ s : σ, f (TateAlgebra.X s) = g (TateAlgebra.X s)) : f = g := by
-  have hpoly : f.comp MvPolynomial.toTate = g.comp MvPolynomial.toTate := by
-    apply MvPolynomial.algHom_ext
-    intro s
-    simpa [MvPolynomial.toTate_X] using h s
-  have hfcont : Continuous f := by
-    have hf := IsStrictAffinoid.isContractiveHom f
-    have hLip : LipschitzWith 1 f := by
-      intro x y
-      simpa [edist_dist, dist_eq_norm] using
-        ENNReal.ofReal_le_ofReal ((IsStrictAffinoid.isContractiveHom f) (x - y))
-    exact hLip.continuous
-  have hgcont : Continuous g := by
-    have hLip : LipschitzWith 1 g := by
-      intro x y
-      simpa [edist_dist, dist_eq_norm] using
-        ENNReal.ofReal_le_ofReal ((IsStrictAffinoid.isContractiveHom g) (x - y))
-    exact hLip.continuous
-  have hpoly_fun : (fun p : MvPolynomial σ k => f p.toTate) =
-      fun p : MvPolynomial σ k => g p.toTate := by
-    exact congrArg (fun h : MvPolynomial σ k →ₐ[k] A => ⇑h) hpoly
-  have hfg_fun : ⇑f = ⇑g :=
-    DenseRange.equalizer (MvPolynomial.toTate_denseRange σ k) hfcont hgcont hpoly_fun
-  exact AlgHom.ext fun x => by simpa using congrArg (fun h : TateAlgebra σ k → A => h x) hfg_fun
+  have hpoly : f.comp MvPolynomial.toTate = g.comp MvPolynomial.toTate :=
+    MvPolynomial.algHom_ext fun s ↦ by simp [MvPolynomial.toTate_X, h s]
+  exact AlgHom.ext fun x ↦ congrArg (fun h ↦ h x) <| DenseRange.equalizer
+    (MvPolynomial.toTate_denseRange σ k) (isContractiveHom f).continuous
+      (isContractiveHom g).continuous <| congrArg (fun h : MvPolynomial σ k →ₐ[k] A ↦ ⇑h) hpoly
 
 end IsStrictAffinoid

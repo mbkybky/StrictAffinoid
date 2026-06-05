@@ -5,13 +5,14 @@ Authors: Yongle Hu
 -/
 module
 
-public import StrictAffinoid.StrictlyClosed
+public import StrictAffinoid.Cartesian
+public import StrictAffinoid.Reduction
 
 public section
 
-open Valued NormedField TateAlgebra
+open Valued NormedField IsStrictAffinoid
 
-open scoped Topology
+open scoped Topology BigOperators
 
 section IsDistinguishedEpi
 
@@ -20,7 +21,7 @@ variable {k : Type*} [NormedField k] {A B C : Type*} [SeminormedRing A] [NormedA
 
 /-- `f : A →ₐ[k] B` is distinguished if for any `b ∈ B`, there exists `a ∈ A` such that
   `f a = b` and `‖a‖ = ‖b‖`. -/
-def IsDistinguishedEpi (f : A →ₐ[k] B) : Prop := ∀ b : B, ∃ a : A, f a = b ∧ ‖a‖ = ‖b‖
+def IsDistinguishedEpi (f : A →ₐ[k] B) : Prop := ∀ b : B, ∃ (a : A) (_ : f a = b), ‖a‖ = ‖b‖
 
 lemma IsDistinguishedEpi.surjective {f : A →ₐ[k] B} (hf : IsDistinguishedEpi f) :
     Function.Surjective f := by
@@ -33,19 +34,9 @@ lemma IsDistinguishedEpi.comp {f : A →ₐ[k] B} {g : B →ₐ[k] C} (hf : IsDi
   intro c
   rcases hg c with ⟨b, rfl, hb⟩
   rcases hf b with ⟨a, rfl, ha⟩
-  exact ⟨a, by simp, by simp [ha, hb]⟩
+  exact ⟨a, rfl, ha.trans hb⟩
 
 lemma IsDistinguishedEpi.id : IsDistinguishedEpi (AlgHom.id k A) := fun a ↦ ⟨a, rfl, rfl⟩
-
-lemma isAdmissibleHom_of_isDistinguishedEpi_of_isContractiveHom {k : Type*} [NormedField k]
-    {A B : Type*} [SeminormedRing A] [NormedAlgebra k A] [SeminormedRing B] [NormedAlgebra k B]
-    {f : A →ₐ[k] B} (hfd : IsDistinguishedEpi f) (hfc : IsContractiveHom f.toRingHom) :
-    IsAdmissibleHom f.toRingHom := by
-  refine ⟨1, Real.zero_lt_one, ?_⟩
-  intro a
-  simp only [AlgHom.toRingHom_eq_coe, RingHom.coe_coe, one_mul]
-  rcases hfd (f a) with ⟨b, hb, hn⟩
-  exact ⟨(csInf_le (bddBelow_preImageNormSet f (f a)) ⟨b, hb, rfl⟩).trans_eq hn, hfc a⟩
 
 end IsDistinguishedEpi
 
@@ -64,7 +55,11 @@ variable (σ : Type*) [Finite σ] {k : Type*} [NormedField k] [CompleteSpace k] 
 
 namespace IsDistinguished
 
+open Module
+
 variable [IsDistinguished k A]
+
+include k
 
 theorem _root_.IsDistinguishedEpi.isDistinguished [IsStrictAffinoid k B]
     {f : A →ₐ[k] B} (hf : IsDistinguishedEpi f) : IsDistinguished k B where
@@ -85,51 +80,103 @@ variable (k) in
 theorem value_group_subset (a : A) : ∃ x : k, ‖x‖ = ‖a‖ := by
   rcases IsDistinguished.exist_distinguishedEpi k A with ⟨τ, _, φ, hφ⟩
   rcases hφ a with ⟨F, rfl, hF⟩
-  by_cases hzero : F = 0
-  · refine ⟨0, ?_⟩
-    simp [hzero] at hF ⊢
-  · rcases TateAlgebra.exists_coeff_norm_eq_norm F hzero with ⟨e, he⟩
-    refine ⟨MvPowerSeries.coeff e F.1, ?_⟩
-    simpa [hF] using he
+  simp [← hF, F.value_group_subset]
+
+variable (k) in
+/-- Let `A` be a distinguished `k`-affinoid algebra, then any ideal of `A` is strictly closed. -/
+theorem ideal_isStrictlyClosed (I : Ideal A) : I.IsStrictlyClosed := by
+  rcases IsDistinguished.exist_distinguishedEpi k A with ⟨σ, _, φ, hφ⟩
+  intro a
+  rcases Ideal.Quotient.mk_surjective a with ⟨x, rfl⟩
+  rcases hφ x with ⟨t₀, ht₀, -⟩
+  let J : Ideal (TateAlgebra σ k) := Ideal.comap φ I
+  rcases TateAlgebra.ideal_isStrictlyClosed σ k J (Ideal.Quotient.mk J t₀) with ⟨t, ht, htnorm⟩
+  have ha : (Ideal.Quotient.mk I) (φ t) = (Ideal.Quotient.mk I) x := by
+    simpa [Ideal.Quotient.eq, ← ht₀, J, map_sub] using Ideal.Quotient.eq.1 ht
+  refine ⟨φ t, ha, le_antisymm ?_ ?_⟩
+  · refine le_of_not_gt fun hlt ↦ ?_
+    obtain ⟨a₁, ha₁, ha₁lt⟩ := QuotientAddGroup.norm_lt_iff.1 hlt
+    rcases hφ a₁ with ⟨t₁, ht₁, ht₁norm⟩
+    have ht₁q : Ideal.Quotient.mk J t₁ = Ideal.Quotient.mk J t₀ := by
+      rw [Ideal.Quotient.eq, Ideal.mem_comap]
+      simpa [map_sub, ht₁, ht₀] using Ideal.Quotient.eq.1 ha₁
+    have ht_le_t₁ : ‖t‖ ≤ ‖t₁‖ := by
+      simpa [htnorm, ht₁q] using Ideal.Quotient.norm_mk_le J t₁
+    exact not_lt_of_ge ((isContractiveHom φ t).trans (ht_le_t₁.trans_eq ht₁norm)) ha₁lt
+  · grw [← ha, Ideal.Quotient.norm_mk_le I (φ t)]
+
+variable (k) in
+/-- Let `A` be a distinguished `k`-affinoid algebra, then any ideal of `A` is boundedly
+generated. -/
+theorem ideal_isBoundedlyGenerated (I : Ideal A) : IsBoundedlyGenerated A I := by
+  rcases IsDistinguished.exist_distinguishedEpi k A with ⟨τ, hτ, φ, hφ⟩
+  let J : Ideal (TateAlgebra τ k) := Ideal.comap φ I
+  rcases TateAlgebra.ideal_isBoundedlyGenerated τ k J with ⟨σ, hσ, e, he⟩
+  refine ⟨σ, hσ, fun i ↦ ⟨φ (e i).1, (e i).2⟩, ⟨?_, ?_⟩⟩
+  · intro i
+    grw [Submodule.coe_norm, isContractiveHom φ (e i).1, ← Submodule.coe_norm, he.norm_le_one i]
+  · intro m
+    rcases hφ m.1 with ⟨t, ht, htnorm⟩
+    rcases he.boundedly_generate ⟨t, by simp [J, ht, m.2]⟩ with ⟨b, hb, hbnorm⟩
+    refine ⟨fun i ↦ φ (b i), ?_, ?_⟩
+    · apply Subtype.ext
+      have hbval : t = ∑ i, b i • e i := congrArg Subtype.val hb
+      simp [← ht, hbval, map_sum, map_mul]
+    · intro i
+      grw [Submodule.coe_norm, isContractiveHom φ (b i), hbnorm i, Submodule.coe_norm, htnorm]
+
+variable (k) in
+theorem ideal_integer_fg (I : Ideal A) : (I.integer k).FG := by
+  rcases ideal_isBoundedlyGenerated k I with ⟨τ, hτ, E, hE⟩
+  let Eint : τ → Integer k A := fun i ↦ ⟨(E i).1, hE.norm_le_one i⟩
+  have hEspan : Ideal.span (Set.range Eint) = I.integer k := by
+    apply le_antisymm
+    · rw [Ideal.span_le]
+      rintro x ⟨i, rfl⟩
+      exact (E i).2
+    · intro q hq
+      rcases hE.boundedly_generate (⟨q.1, hq⟩ : I) with ⟨a, ha, hanorm⟩
+      let aI : τ → Integer k A := fun i ↦ ⟨a i, (hanorm i).trans q.2⟩
+      have hqint : q = ∑ i, aI i * Eint i := by
+        apply Subtype.ext
+        have hqval : q.1 = ∑ i, a i * (E i).1 := by
+          simpa using congrArg Subtype.val ha
+        have hsum_val : (∑ i, aI i * Eint i).1 = ∑ i, a i * (E i).1 := by
+          simpa [← Integer.algebraMap_eq_val] using by rfl
+        exact hqval.trans hsum_val.symm
+      rw [hqint]
+      apply Ideal.sum_mem
+      intro i _
+      exact Ideal.mul_mem_left _ _ (Ideal.subset_span ⟨i, rfl⟩)
+  rw [← hEspan]
+  exact Submodule.fg_span (Set.finite_range Eint)
 
 theorem exists_lift_norm_eq_residue_norm {f : A →ₐ[k] B} (hf : Function.Surjective f) (b : B) :
-    ∃ a : A, f a = b ∧ ‖a‖ = sInf {r : ℝ | ∃ a' : A, f a' = b ∧ ‖a'‖ = r} := by
-  rcases IsDistinguished.exist_distinguishedEpi k A with ⟨τ, hτ, φ, hφ⟩
-  have : Fintype τ := hτ
-  let g : TateAlgebra τ k →ₐ[k] B := f.comp φ
+    ∃ (a : A) (_ : f a = b), ‖a‖ = sInf (preImageNormSet f b) := by
+  rcases IsDistinguished.exist_distinguishedEpi k A with ⟨σ, hσ, φ, hφ⟩
+  let g : TateAlgebra σ k →ₐ[k] B := f.comp φ
   have hg : Function.Surjective g := hf.comp hφ.surjective
-  let e : (TateAlgebra τ k ⧸ RingHom.ker g) ≃ₐ[k] B := Ideal.quotientKerAlgEquivOfSurjective hg
-  let x : TateAlgebra τ k ⧸ RingHom.ker g := e.symm b
-  obtain ⟨t, ht, htnormq⟩ := TateAlgebra.exists_norm_eq_residue_norm (I := RingHom.ker g) x
+  let e : (TateAlgebra σ k ⧸ RingHom.ker g) ≃ₐ[k] B := Ideal.quotientKerAlgEquivOfSurjective hg
+  let x : TateAlgebra σ k ⧸ RingHom.ker g := e.symm b
+  obtain ⟨t, ht, htnormq⟩ := TateAlgebra.ideal_isStrictlyClosed σ k (RingHom.ker g) x
   have hgb : g t = b := by simpa [e, x] using congrArg e ht
   have htnorm : ‖t‖ = sInf (preImageNormSet g b) := by
     apply le_antisymm
-    · refine le_csInf ⟨‖t‖, ⟨t, hgb, rfl⟩⟩ ?_
-      rintro r ⟨t', ht'b, ht'norm⟩
+    · refine le_csInf ⟨‖t‖, ⟨t, hgb, rfl⟩⟩ fun r ⟨t', ht'b, ht'norm⟩ ↦ ?_
       have hmk' : (Ideal.Quotient.mk (RingHom.ker g)) t' = x := by
         apply (Ideal.quotientKerAlgEquivOfSurjective hg).injective
         simpa [e, x] using ht'b
-      calc
-        ‖t‖ = ‖x‖ := htnormq
-        _ ≤ ‖t'‖ := by simpa [hmk'] using Ideal.Quotient.norm_mk_le (RingHom.ker g) t'
-        _ = r := ht'norm
+      rw [htnormq, ← ht'norm]
+      simpa [hmk'] using Ideal.Quotient.norm_mk_le (RingHom.ker g) t'
     · exact csInf_le (bddBelow_preImageNormSet g b) ⟨t, hgb, rfl⟩
-  let a : A := φ t
-  have hab : f a = b := hgb
-  have hSf_a : ‖a‖ ∈ preImageNormSet f b := ⟨a, hab, rfl⟩
-  refine ⟨a, hab, le_antisymm ?_ ?_⟩
-  · have ha_le_t : ‖a‖ ≤ ‖t‖ := IsStrictAffinoid.isContractiveHom φ t
-    refine ha_le_t.trans ?_
-    rw [htnorm]
-    refine le_csInf ⟨‖a‖, hSf_a⟩ ?_
-    rintro r ⟨a', ha'b, ha'norm⟩
-    rcases hφ a' with ⟨t', ht'a', ht'norm⟩
-    have ht'Sg : ‖t'‖ ∈ preImageNormSet g b := by
-      refine ⟨t', ?_, rfl⟩
-      simp [g, ht'a', ha'b]
-    calc _ ≤ ‖t'‖ := csInf_le (bddBelow_preImageNormSet g b) ht'Sg
-      _ = ‖a'‖ := ht'norm
-      _ = r := ha'norm
+  have hab : f (φ t) = b := hgb
+  have hSf_a : ‖φ t‖ ∈ preImageNormSet f b := ⟨φ t, hab, rfl⟩
+  refine ⟨φ t, hab, le_antisymm ?_ ?_⟩
+  · grw [IsStrictAffinoid.isContractiveHom φ t, htnorm]
+    refine le_csInf ⟨‖φ t‖, hSf_a⟩ ?_
+    intro r ⟨a', ha'b, ha'⟩
+    rcases hφ a' with ⟨t', ht'a', ht'⟩
+    grw [csInf_le (bddBelow_preImageNormSet g b) ⟨t', by simp [g, ht'a', ha'b], rfl⟩, ht', ha']
   · exact csInf_le (bddBelow_preImageNormSet f b) hSf_a
 
 end IsDistinguished
@@ -142,12 +189,8 @@ lemma isDistinguishedEpi_of_comp {f : A →ₐ[k] B} {g : B →ₐ[k] C}
     (hfg : IsDistinguishedEpi (g.comp f)) : IsDistinguishedEpi g := by
   intro c
   rcases hfg c with ⟨a, ha, hnorm⟩
-  refine ⟨f a, ha, le_antisymm ((IsStrictAffinoid.isContractiveHom f a).trans_eq hnorm) ?_⟩
-  simpa [← ha] using IsStrictAffinoid.isContractiveHom g (f a)
-
-lemma isAdmissibleHom_of_isDistinguishedEpi {f : A →ₐ[k] B} (hf : IsDistinguishedEpi f) :
-    IsAdmissibleHom f.toRingHom :=
-  isAdmissibleHom_of_isDistinguishedEpi_of_isContractiveHom hf (isContractiveHom f)
+  refine ⟨f a, ha, le_antisymm ((isContractiveHom f a).trans_eq hnorm) ?_⟩
+  simpa [← ha] using isContractiveHom g (f a)
 
 /-- `f° : A° → B°` is surjective if `f` is a distinguished epimorphism. -/
 theorem integerMap_surjective_of_isDistinguishedEpi {f : A →ₐ[k] B} (hf : IsDistinguishedEpi f) :
@@ -168,16 +211,11 @@ theorem isDistinguishedEpi_of_integerMap_surjective {f : A →ₐ[k] B}
     (hvg : ∀ b : B, ∃ c : k, ‖c‖ = ‖b‖) : IsDistinguishedEpi f := by
   intro b
   by_cases hb0 : b = 0
-  · refine ⟨0, ?_, ?_⟩
-    · simp [hb0]
-    · simp [hb0]
+  · exact ⟨0, by simp [hb0], by simp [hb0]⟩
   · rcases hvg b with ⟨c, hc⟩
     have hc0 : c ≠ 0 := by
       intro hc0
-      apply hb0
-      apply norm_eq_zero.mp
-      rw [← hc, hc0]
-      simp
+      exact hb0 (norm_eq_zero.mp (by simpa [hc0] using hc.symm))
     have hb_norm_ne : ‖b‖ ≠ 0 := norm_ne_zero_iff.mpr hb0
     let bI : Integer k B := ⟨c⁻¹ • b, by
       have hbI_norm : ‖c⁻¹ • b‖ = 1 := by
@@ -187,162 +225,53 @@ theorem isDistinguishedEpi_of_integerMap_surjective {f : A →ₐ[k] B}
     rcases hf bI with ⟨aI, haI⟩
     have haI' : f aI.1 = c⁻¹ • b := congrArg Subtype.val haI
     have haI_norm : ‖aI.1‖ = 1 := by
-      have hle1 : ‖aI.1‖ ≤ 1 := aI.2
-      have hge1 : 1 ≤ ‖aI.1‖ := by
-        have hbI_norm : ‖c⁻¹ • b‖ = 1 := by
-          rw [norm_smul, norm_inv, hc, inv_mul_cancel₀]
-          exact hb_norm_ne
-        calc _ = ‖c⁻¹ • b‖ := hbI_norm.symm
-          _ = ‖f aI.1‖ := by rw [haI']
-          _ ≤ ‖aI.1‖ := isContractiveHom f aI.1
-      exact le_antisymm hle1 hge1
+      refine le_antisymm aI.2 ?_
+      have hbI_norm : ‖c⁻¹ • b‖ = 1 := by rw [norm_smul, norm_inv, hc, inv_mul_cancel₀ hb_norm_ne]
+      grw [← hbI_norm, ← haI', isContractiveHom f aI.1]
     refine ⟨c • aI.1, ?_, ?_⟩
-    · calc
-        f (c • aI.1) = c • f aI.1 := by simp
-        _ = c • (c⁻¹ • b) := by rw [haI']
-        _ = b := by simp [hc0]
-    · calc
-        ‖c • aI.1‖ = ‖c‖ * ‖aI.1‖ := by rw [norm_smul]
-        _ = ‖c‖ := by simp [haI_norm]
-        _ = ‖b‖ := hc
+    · grw [map_smul, haI']
+      simp [hc0]
+    · grw [norm_smul, hc, haI_norm, mul_one]
 
-private lemma exists_topNil_lift_pow_of_image_topNil {f : A →ₐ[k] B} (hf : Function.Surjective f)
-    {a : Integer k A} (ha : (integerMap f) a ∈ topNil k B) :
-    ∃ n : ℕ, 0 < n ∧ ∃ b : Integer k A, b ∈ topNil k A ∧
-      (integerMap f) b = (integerMap f) (a ^ n) := by
-  have ha_lt : ‖f a.1‖ < 1 := by
-    simpa [mem_topologicalNilradical_iff_norm_lt_one] using ha
-  by_cases htv : ∃ x : k, x ≠ 0 ∧ ‖x‖ ≠ 1
-  · let : NontriviallyNormedField k := NontriviallyNormedField.ofNormNeOne htv
-    rcases admissible_of_surjective f hf with ⟨C, hCpos, hC⟩
-    obtain ⟨m, hm⟩ := exists_pow_lt_of_lt_one (show 0 < C⁻¹ by positivity) ha_lt
-    let n : ℕ := m + 1
-    have hn_pos : 0 < n := Nat.succ_pos m
-    have hpow_lt : ‖f a.1‖ ^ n < C⁻¹ := by
-      calc _ = ‖f a.1‖ ^ m * ‖f a.1‖ := by simp [n, pow_succ]
-        _ ≤ ‖f a.1‖ ^ m * 1 := by
-          have hmul : ‖f a.1‖ ^ m * ‖f a.1‖ ≤ ‖f a.1‖ ^ m * 1 := by gcongr
-          simpa using hmul
-        _ = ‖f a.1‖ ^ m := by ring
-        _ < C⁻¹ := hm
-    have hCpow_lt : C * ‖f a.1‖ ^ n < 1 := by
-      have hmul := mul_lt_mul_of_pos_left hpow_lt hCpos
-      simpa [mul_inv_cancel₀ hCpos.ne'] using hmul
-    have hQne : (preImageNormSet f (f (a.1 ^ n))).Nonempty := ⟨‖a.1 ^ n‖, a.1 ^ n, rfl, rfl⟩
-    have hfnorm : ‖f (a.1 ^ n)‖ = ‖f a.1‖ ^ n := by
-      rw [map_pow, IsStrictAffinoid.withSpectralNorm k n (f a.1)]
-    have hlt : sInf (preImageNormSet f (f (a.1 ^ n))) < 1 := by
-      have htarget_lt : C * ‖f (a.1 ^ n)‖ < 1 := by
-        simpa [map_pow, IsStrictAffinoid.withSpectralNorm k n (f a.1)] using hCpow_lt
-      exact lt_of_le_of_lt (hC (a.1 ^ n)).1 htarget_lt
-    obtain ⟨r, hrQ, hrlt⟩ := (csInf_lt_iff (bddBelow_preImageNormSet f (f (a.1 ^ n))) hQne).1 hlt
-    rcases hrQ with ⟨x, hx, hxnorm⟩
-    let b : Integer k A := ⟨x, le_of_lt (hxnorm.trans_lt hrlt)⟩
-    refine ⟨n, hn_pos, b, ?_, ?_⟩
-    · rw [mem_topologicalNilradical_iff_norm_lt_one]
-      exact hxnorm.trans_lt hrlt
-    · exact Subtype.ext hx
-  · have hzero : f a.1 = 0 := by
-      by_contra hne
-      have hone : ‖f a.1‖ = 1 := IsStrictAffinoid.norm_eq_one_of_trivially_valued htv hne
-      exact (not_lt_of_ge hone.ge) ha_lt
-    refine ⟨1, Nat.one_pos, 0, ?_, ?_⟩
-    · exact (topNil k A).zero_mem
-    · simpa using (Subtype.ext hzero).symm
+end IsStrictAffinoid
 
-theorem isDistinguishedEpi_tfae [IsDistinguished k A] {f : A →ₐ[k] B}
-    (hf : Function.Surjective f) : List.TFAE
+/--
+Let $\mathscr{A}$ be a distinguished $k$-affinoid algebra, $\mathscr{B}$ be a strict $k$-affinoid
+algebra, $f : \mathscr{A} \to \mathscr{B}$ be a surjective $k$-algebra homomorphism.
+Then the following are equivalent:
+1. $f$ is distinguished.
+2. $f(\mathscr{A}^{\circ\circ}) = \mathscr{B}^{\circ\circ}$.
+3. The ideal $\widetilde{\ker(f^\circ)} \subset \widetilde{\mathscr{A}}$ is radical.
+4. $\ker(\widetilde{f}) = \widetilde{\ker(f^\circ)}$.
+-/
+theorem IsStrictAffinoid.isDistinguishedEpi_tfae [IsDistinguished k A] [IsStrictAffinoid k B]
+    {f : A →ₐ[k] B} (hf : Function.Surjective f) : List.TFAE
     [ IsDistinguishedEpi f,
       ∀ b ∈ topNil k B, ∃ a : topNil k A, (integerMap f) a = b,
-      (topNil k A ⊔ RingHom.ker (integerMap f)).IsRadical,
+      (Ideal.map (reductionMap k A) (RingHom.ker (integerMap f))).IsRadical,
       RingHom.ker f.reduction = Ideal.map (reductionMap k A) (RingHom.ker (integerMap f)) ] := by
   tfae_have 1 → 2 := by
     intro hdist b hb
-    have hb_lt : ‖b.1‖ < 1 := (mem_topologicalNilradical_iff_norm_lt_one b).1 hb
+    have hb_lt : ‖b.1‖ < 1 := (mem_topNil_iff b).1 hb
     rcases hdist b.1 with ⟨a, ha, hnorm⟩
-    have ha_le : ‖a‖ ≤ 1 := le_of_lt (hnorm.trans_lt hb_lt)
-    let aI : Integer k A := ⟨a, ha_le⟩
-    have ha_top : aI ∈ topNil k A := by
-      rw [mem_topologicalNilradical_iff_norm_lt_one]
-      exact hnorm.trans_lt hb_lt
-    refine ⟨⟨aI, ha_top⟩, ?_⟩
-    exact Subtype.ext ha
+    let aI : Integer k A := ⟨a, (hnorm.trans_lt hb_lt).le⟩
+    exact ⟨⟨aI, (mem_topNil_iff aI).2 (hnorm.trans_lt hb_lt)⟩, Subtype.ext ha⟩
   tfae_have 2 → 3 := by
+    rw [← Ideal.radical_eq_iff]
     intro htop
-    let J : Ideal (Integer k A) := topNil k A ⊔ RingHom.ker (integerMap f)
-    rw [Ideal.isRadical_iff_pow_one_lt 2 Nat.one_lt_two]
-    intro a ha
-    have hJmap : ∀ {x : Integer k A}, x ∈ J → (integerMap f) x ∈ topNil k B := by
-      intro x hx
-      rw [Submodule.mem_sup] at hx
-      rcases hx with ⟨y, hy, c, hc, rfl⟩
-      have hy' : (integerMap f) y ∈ topNil k B := by
-        rw [mem_topologicalNilradical_iff_norm_lt_one] at hy ⊢
-        exact lt_of_le_of_lt (isContractiveHom f y.1) hy
-      have hc' : (integerMap f) c = 0 := by simpa [RingHom.mem_ker] using hc
-      simpa [map_add, hc'] using hy'
-    have himage_sq : (integerMap f) (a ^ 2) ∈ topNil k B := hJmap ha
-    have himage : (integerMap f) a ∈ topNil k B := by
-      have hrad := topNil_isRadical k B
-      rw [Ideal.isRadical_iff_pow_one_lt 2 Nat.one_lt_two] at hrad
-      apply hrad
-      simpa [map_pow] using himage_sq
-    rcases htop ((integerMap f) a) himage with ⟨b, hbEq⟩
-    have hk : a - b ∈ RingHom.ker (integerMap f) := by
-      rw [RingHom.mem_ker]
-      apply Subtype.ext
-      simp [map_sub, hbEq]
-    have hsum : (b : Integer k A) + (a - b) = a := by abel
-    exact hsum ▸ Submodule.add_mem_sup b.2 hk
+    apply le_antisymm
+    · rw [← reduction_ker_eq_radical_map_integerMap_ker (isAdmissibleHom_of_surjective hf)]
+      exact reduction_ker_le_map_integerMap_ker_of_topNil_lift htop
+    · exact Ideal.le_radical
   tfae_have 3 → 4 := by
-    intro hJrad
-    let J : Ideal (Integer k A) := topNil k A ⊔ RingHom.ker (integerMap f)
-    ext z
-    constructor
-    · intro hz
-      rcases Ideal.Quotient.mk_surjective z with ⟨a, rfl⟩
-      rw [RingHom.mem_ker] at hz
-      change Ideal.Quotient.mk (topNil k B) ((integerMap f) a) = 0 at hz
-      rw [Ideal.Quotient.eq_zero_iff_mem] at hz
-      change _ ∈ Ideal.map (Ideal.Quotient.mk (topNil k A)) (RingHom.ker (integerMap f))
-      rw [Ideal.mem_map_iff_of_surjective _ Ideal.Quotient.mk_surjective]
-      rcases exists_topNil_lift_pow_of_image_topNil hf hz with ⟨n, hn_pos, b, hb, hEq⟩
-      have hk : a ^ n - b ∈ RingHom.ker (integerMap f) := by
-        rw [RingHom.mem_ker]
-        apply Subtype.ext
-        simp [map_sub, hEq]
-      have hpow_mem : a ^ n ∈ J := by
-        have hsum : b + (a ^ n - b) = a ^ n := by abel
-        exact hsum ▸ Submodule.add_mem_sup hb hk
-      have ha_rad : a ∈ J.radical := (Ideal.mem_radical_iff).2 ⟨n, hpow_mem⟩
-      have hrad_eq : J.radical = J := (Ideal.radical_eq_iff).2 hJrad
-      have haJ : a ∈ J := by simpa [hrad_eq] using ha_rad
-      rw [Submodule.mem_sup] at haJ
-      rcases haJ with ⟨y, hy, c, hc, hdecomp⟩
-      refine ⟨c, hc, ?_⟩
-      rw [Ideal.Quotient.eq]
-      have hca : c - a = -y := by
-        rw [← hdecomp]
-        abel
-      simpa [hca] using (topNil k A).neg_mem hy
-    · intro hz
-      rcases Ideal.Quotient.mk_surjective z with ⟨a, rfl⟩
-      change _ ∈ Ideal.map (Ideal.Quotient.mk (topNil k A)) (RingHom.ker (integerMap f)) at hz
-      rw [Ideal.mem_map_iff_of_surjective _ Ideal.Quotient.mk_surjective] at hz
-      rcases hz with ⟨c, hc, hqeq⟩
-      rw [RingHom.mem_ker]
-      change Ideal.Quotient.mk (topNil k B) ((integerMap f) a) = 0
-      have hc0 : (integerMap f) c = 0 := by simpa [RingHom.mem_ker] using hc
-      have hleft : f.reduction (Ideal.Quotient.mk (topNil k A) c) = 0 := by
-        change Ideal.Quotient.mk (topNil k B) ((integerMap f) c) = 0
-        simp [hc0]
-      simpa [hleft] using congrArg f.reduction hqeq.symm
+    simp [reduction_ker_eq_radical_map_integerMap_ker (isAdmissibleHom_of_surjective hf),
+      Ideal.radical_eq_iff]
   tfae_have 4 → 1 := by
     intro hred b
     by_cases hb0 : b = 0
     · exact ⟨0, by simp [hb0], by simp [hb0]⟩
     · obtain ⟨a, ha, hamin⟩ := IsDistinguished.exists_lift_norm_eq_residue_norm hf b
-      rcases IsDistinguished.value_group_subset (k := k) (A := A) a with ⟨c, hc⟩
+      rcases IsDistinguished.value_group_subset k a with ⟨c, hc⟩
       have hc0 : c ≠ 0 := by
         intro hc0
         apply hb0
@@ -353,16 +282,12 @@ theorem isDistinguishedEpi_tfae [IsDistinguished k A] {f : A →ₐ[k] B}
         simpa [ha] using hf_norm0
       have ha0 : a ≠ 0 := by
         intro ha0
-        apply hb0
-        simpa [ha0] using ha.symm
+        exact hb0 (by simpa [ha0] using ha.symm)
       let aI : Integer k A := ⟨c⁻¹ • a, by
         have haI_norm : ‖c⁻¹ • a‖ = 1 := by
           rw [norm_smul, norm_inv, hc, inv_mul_cancel₀]
           exact norm_ne_zero_iff.mpr ha0
         exact le_of_eq haI_norm⟩
-      have haI_eq : f aI.1 = c⁻¹ • b := by
-        calc _ = c⁻¹ • f a := by simp [aI]
-          _ = c⁻¹ • b := by rw [ha]
       have haI_not_mem :
           reductionMap k A aI ∉ Ideal.map (reductionMap k A) (RingHom.ker (integerMap f)) := by
         intro hmem
@@ -372,20 +297,14 @@ theorem isDistinguishedEpi_tfae [IsDistinguished k A] {f : A →ₐ[k] B}
         have hy_top : y ∈ topNil k A := (Ideal.Quotient.eq).1 hqeq.symm
         have hcI0 : (integerMap f) cI = 0 := by simpa [RingHom.mem_ker] using hcI
         have hcI0' : f cI.1 = 0 := congrArg Subtype.val hcI0
-        have hy_eq : f y.1 = c⁻¹ • b := by
-          calc _ = f aI.1 - f cI.1 := by simp [y]
-            _ = c⁻¹ • b := by simp [haI_eq, hcI0']
+        have hy_eq : f y.1 = c⁻¹ • b := by simp [y, aI, ha, hcI0']
         have hy_lt : ‖y.1‖ < 1 :=
-          (mem_topologicalNilradical_iff_norm_lt_one (k := k) (A := A) y).1 hy_top
+          (mem_topNil_iff y).1 hy_top
         let a' : A := c • y.1
-        have ha'_eq : f a' = b := by
-          calc _ = c • f y.1 := by simp [a']
-            _ = c • (c⁻¹ • b) := by rw [hy_eq]
-            _ = b := by simp [hc0]
+        have ha'_eq : f a' = b := by simp [a', hy_eq, hc0]
         have ha'_lt : ‖a'‖ < ‖a‖ := by
-          calc _ = ‖c‖ * ‖y.1‖ := by rw [show a' = c • y.1 by rfl, norm_smul]
-            _ < ‖c‖ * 1 := mul_lt_mul_of_pos_left hy_lt (norm_pos_iff.mpr hc0)
-            _ = ‖a‖ := by simp [hc]
+          simpa [a', norm_smul] using
+            (mul_lt_mul_of_pos_left hy_lt (norm_pos_iff.mpr hc0)).trans_le (by simp [hc])
         have hSa' : ‖a'‖ ∈ preImageNormSet f b := ⟨a', ha'_eq, rfl⟩
         have : ¬ sInf (preImageNormSet f b) ≤ ‖a'‖ := by
           rw [← hamin]
@@ -393,28 +312,22 @@ theorem isDistinguishedEpi_tfae [IsDistinguished k A] {f : A →ₐ[k] B}
         exact this (csInf_le (bddBelow_preImageNormSet f b) hSa')
       have hred_ne : f.reduction (reductionMap k A aI) ≠ 0 := by
         intro hz
-        have hker : reductionMap k A aI ∈ RingHom.ker f.reduction := by
+        exact haI_not_mem <| by
+          rw [← hred]
           simpa [RingHom.mem_ker] using hz
-        exact haI_not_mem (by simpa [hred] using hker)
-      have hbI_not_top : (integerMap f) aI ∉ topNil k B := by
+      have hnt : (integerMap f) aI ∉ topNil k B := by
         intro hbI_top
-        apply hred_ne
-        exact Ideal.Quotient.eq_zero_iff_mem.2 hbI_top
+        exact hred_ne (Ideal.Quotient.eq_zero_iff_mem.2 hbI_top)
       have hbI_norm : ‖(integerMap f) aI‖ = 1 := by
         apply le_antisymm
-        · exact (integerMap f aI).2
-        · exact le_of_not_gt <| by
-            intro hlt
-            exact hbI_not_top <|
-              (mem_topologicalNilradical_iff_norm_lt_one ((integerMap f) aI)).2 hlt
+        · exact (integerMap f aI).norm_le
+        · exact le_of_not_gt <| fun hlt ↦
+            hnt ((mem_topNil_iff ((integerMap f) aI)).2 hlt)
       have hbI_eq_norm : ‖(integerMap f) aI‖ = ‖c‖⁻¹ * ‖b‖ := by
-        change ‖f aI.1‖ = ‖c‖⁻¹ * ‖b‖
-        rw [haI_eq, norm_smul, norm_inv]
+        simp [Integer.norm_eq, integerMap_val, aI, ha, norm_smul, norm_inv]
       have hb_eq_c : ‖b‖ = ‖c‖ := by
         calc _ = ‖c‖ * (‖c‖⁻¹ * ‖b‖) := by field_simp [norm_ne_zero_iff.mpr hc0]
           _ = ‖c‖ * ‖(integerMap f) aI‖ := by rw [hbI_eq_norm]
           _ = ‖c‖ := by simp [hbI_norm]
       exact ⟨a, ha, hc.symm.trans hb_eq_c.symm⟩
   tfae_finish
-
-end IsStrictAffinoid

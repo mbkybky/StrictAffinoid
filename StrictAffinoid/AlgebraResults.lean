@@ -18,16 +18,13 @@ theorem fg_of_fg_map_of_fg_inf_ker_of_surjective {R S : Type*} [CommRing R]
     [CommRing S] {f : R →+* S} {I : Ideal R} (hmap : (I.map f).FG) (hk : (I ⊓ (RingHom.ker f)).FG)
     (hf : Function.Surjective f) : I.FG := by
   algebraize [f]
-  have h : Submodule.map (Module.compHom.toLinearMap f) I = (I.map f).restrictScalars R := by
-    ext
-    have : RingHomSurjective f := ⟨hf⟩
-    simp [Ideal.map_eq_submodule_map]
   refine Submodule.fg_of_fg_map_of_fg_inf_ker (Module.compHom.toLinearMap f) ?_ hk
-  simpa [h] using Submodule.FG.restrictScalars_of_surjective hmap hf
+  have : RingHomSurjective f := ⟨hf⟩
+  simpa [Ideal.map_eq_submodule_map] using! Submodule.FG.restrictScalars_of_surjective hmap hf
 
 lemma fg_of_quotient_map_fg {R : Type*} [CommRing R] {I J : Ideal R}
     (hmap : (Ideal.map (Ideal.Quotient.mk J) I).FG) (hJ : J.FG) (hJI : J ≤ I) : I.FG :=
-  Ideal.fg_of_fg_map_of_fg_inf_ker_of_surjective hmap (by simpa [inf_eq_right.mpr hJI] using hJ)
+  fg_of_fg_map_of_fg_inf_ker_of_surjective hmap (by simp [inf_eq_right.mpr hJI, hJ])
     Quotient.mk_surjective
 
 end Ideal
@@ -41,22 +38,12 @@ lemma quotient_of_quotient_isNilpotent_finite (R : Type*) [CommRing R]
     (P := fun {A} [CommRing A] (I : Ideal A) ↦
       ∀ [Algebra R A] [IsNoetherianRing A] [Module.Finite R (A ⧸ I)], Module.Finite R A) ?_ ?_
   · intro A _ I hsq _ _ fin
-    let T : Submodule A I := ⊤
-    have hsmul : I • T = ⊥ := by
+    have hsmul : I • (⊤ : Submodule A I) = ⊥ := by
       ext x
-      constructor
-      · intro hx
-        rw [Submodule.mem_smul_top_iff] at hx
-        have hx0 : x.1 ∈ (⊥ : Ideal A) := by
-          rw [← hsq]
-          simpa only [show I • I = I * I by rfl, pow_two] using hx
-        exact Subtype.ext hx0
-      · intro hx
-        simp only [Submodule.mem_bot] at hx
-        simp [hx]
-    have : Module.Finite R (I ⧸ I • T) := Module.Finite.trans (A ⧸ I) (I ⧸ I • T)
-    have : Module.Finite R (Submodule.restrictScalars R I) :=
-      Module.Finite.equiv ((Submodule.quotEquivOfEqBot (I • T) hsmul).restrictScalars R)
+      simp [Submodule.mem_smul_top_iff, ← pow_two, hsq]
+    have : Module.Finite R (I ⧸ I • (⊤ : Submodule A I)) := Module.Finite.trans (A ⧸ I) (I ⧸ I • ⊤)
+    have : Module.Finite R (Submodule.restrictScalars R I) := Module.Finite.equiv
+      ((Submodule.quotEquivOfEqBot (I • (⊤ : Submodule A I)) hsmul).restrictScalars R)
     have : Module.Finite R (A ⧸ Submodule.restrictScalars R I) := fin
     exact Module.Finite.of_submodule_quotient (Submodule.restrictScalars R I)
   · intro S _ I J hIJ hI _ _ _ _
@@ -67,13 +54,12 @@ lemma quotient_of_quotient_isNilpotent_finite (R : Type*) [CommRing R]
 lemma quotient_of_quotient_radical_finite (R : Type*) [CommRing R]
     {A : Type*} [CommRing A] [Algebra R A] [IsNoetherianRing A] (I : Ideal A)
     [Module.Finite R (A ⧸ I.radical)] : Module.Finite R (A ⧸ I) := by
-  let S : Type _ := A ⧸ I
-  have hm : Ideal.map (Ideal.Quotient.mk I) I.radical = nilradical S := by
-    rw [Ideal.map_radical_of_surjective Ideal.Quotient.mk_surjective (by simp [Ideal.mk_ker])]
-    simp [Ideal.map_quotient_self, nilradical]
-  let e : (S ⧸ nilradical S) ≃ₐ[R] A ⧸ I.radical :=
+  have hm : Ideal.map (Ideal.Quotient.mk I) I.radical = nilradical (A ⧸ I) := by
+    rw [Ideal.map_radical_of_surjective Ideal.Quotient.mk_surjective (by simp)]
+    simp [nilradical]
+  let e : ((A ⧸ I) ⧸ nilradical (A ⧸ I)) ≃ₐ[R] A ⧸ I.radical :=
     (Ideal.quotientEquivAlgOfEq R hm.symm).trans (DoubleQuot.quotQuotEquivQuotOfLEₐ R I.le_radical)
-  have : Module.Finite R (S ⧸ nilradical S) := Module.Finite.equiv e.symm.toLinearEquiv
-  exact quotient_of_quotient_isNilpotent_finite R (IsNoetherianRing.isNilpotent_nilradical S)
+  have : Module.Finite R ((A ⧸ I) ⧸ nilradical (A ⧸ I)) := Module.Finite.equiv e.symm.toLinearEquiv
+  exact quotient_of_quotient_isNilpotent_finite R (IsNoetherianRing.isNilpotent_nilradical (A ⧸ I))
 
 end Module.Finite
