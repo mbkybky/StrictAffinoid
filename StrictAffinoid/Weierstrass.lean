@@ -9,7 +9,6 @@ public import Mathlib.Analysis.Normed.Ring.Units
 public import Mathlib.Data.FunLike.Fintype
 public import Mathlib.RingTheory.AdjoinRoot
 public import Mathlib.RingTheory.MvPolynomial.IrreducibleQuadratic
-public import Mathlib.RingTheory.MvPowerSeries.Substitution
 public import Mathlib.RingTheory.PowerSeries.Basic
 public import StrictAffinoid.AlgebraResults
 public import StrictAffinoid.Basic

@@ -6,9 +6,7 @@ Authors: Yongle Hu
 module
 
 public import Mathlib.Analysis.Normed.Operator.Banach
-public import Mathlib.FieldTheory.Finiteness
 public import Mathlib.RingTheory.Filtration
-public import Mathlib.RingTheory.HopkinsLevitzki
 public import Mathlib.Topology.Algebra.Module.FiniteDimension
 public import StrictAffinoid.Weierstrass
 

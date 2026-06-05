@@ -6,7 +6,6 @@ Authors: Yongle Hu
 module
 
 public import Mathlib.RingTheory.AdicCompletion.Noetherian
-public import Mathlib.RingTheory.DiscreteValuationRing.Basic
 public import Mathlib.Topology.Algebra.Valued.LocallyCompact
 public import StrictAffinoid.Reduction
 

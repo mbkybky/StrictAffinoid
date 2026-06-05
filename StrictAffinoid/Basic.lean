@@ -8,7 +8,6 @@ module
 public import Mathlib.Analysis.Normed.Unbundled.RingSeminorm
 public import Mathlib.Data.Fintype.Shrink
 public import Mathlib.RingTheory.MvPowerSeries.Rename
-public import Mathlib.RingTheory.MvPowerSeries.Trunc
 public import Mathlib.Topology.Algebra.Valued.NormedValued
 
 @[expose] public section
