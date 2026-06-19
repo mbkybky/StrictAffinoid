@@ -211,6 +211,12 @@ reduction `\widetilde{A}`. -/
 noncomputable abbrev reduction (I : Ideal A) : Ideal (Reduction k A) :=
   Ideal.map (reductionMap k A) (I.integer k)
 
+lemma reduction_mem_iff (z : Reduction k A) {I : Ideal A} :
+    z ∈ I.reduction k ↔ ∃ (a : Integer k A) (_ : a ∈ I.integer k), reductionMap k A a = z := by
+  apply (Ideal.mem_map_iff_of_surjective _ Ideal.Quotient.mk_surjective).trans
+  simp only [exists_prop]
+  rfl
+
 end Ideal
 
 section ker

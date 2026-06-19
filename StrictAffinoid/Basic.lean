@@ -507,8 +507,7 @@ lemma norm_mul_eq_of_ordered [LinearOrder σ] (F G : TateAlgebra σ R) : ‖F * 
     MvPowerSeries.coeff ij.1 F.1 * MvPowerSeries.coeff ij.2 G.1
   have hi0 : i0 ∈ t := by simp [i0, t]
   have hi0norm : ‖u i0‖ = ‖F‖ * ‖G‖ := by simp [u, i0, hpnorm, hqnorm, norm_mul]
-  have hrestlt : ∀ ij ∈ t.erase i0, ‖u ij‖ < ‖u i0‖ := by
-    intro ij hij
+  have hrestlt (ij : (σ →₀ ℕ) × (σ →₀ ℕ)) (hij : ij ∈ t.erase i0) : ‖u ij‖ < ‖u i0‖ := by
     obtain ⟨hij_ne, hij_mem⟩ := Finset.mem_erase.mp hij
     have hadd : ij.1 + ij.2 = p + q := by
       simpa [t] using (Finset.mem_antidiagonal.mp hij_mem)
@@ -522,11 +521,7 @@ lemma norm_mul_eq_of_ordered [LinearOrder σ] (F G : TateAlgebra σ R) : ‖F * 
       have hadd' : (toLex ij.1 : Lex (σ →₀ ℕ)) + toLex ij.2 = toLex p + toLex q := by
         simpa using congrArg toLex hadd
       rcases trichotomy_of_add_eq_add hadd' with hEq | hiLt | hjLt
-      · have hEq1 : ij.1 = p := by
-          simpa using congrArg ofLex hEq.1
-        have hEq2 : ij.2 = q := by
-          simpa using congrArg ofLex hEq.2
-        exact hij_ne (Prod.ext hEq1 hEq2)
+      · exact hij_ne (Prod.ext (congrArg ofLex hEq.1) (congrArg ofLex hEq.2))
       · exact hiLt.not_ge hp_le
       · exact hjLt.not_ge hq_le
     have hstrict : ‖MvPowerSeries.coeff ij.1 F.1‖ < ‖F‖ ∨ ‖MvPowerSeries.coeff ij.2 G.1‖ < ‖G‖ := by
@@ -630,7 +625,7 @@ end MvPolynomial
 
 end toTate
 
-/-- A morphism is contractive if it does not increase norms. -/
+/-- A function is contractive if it does not increase norms. -/
 def IsContractiveHom {A B F : Type*} [Norm A] [Norm B] [FunLike F A B] (f : F) : Prop :=
   ∀ a : A, ‖f a‖ ≤ ‖a‖
 
@@ -647,7 +642,7 @@ lemma IsContractiveHom.continuous {A B F : Type*}
 lemma TateAlgebra.rename_isContractiveHom (e : σ ↪ τ) : IsContractiveHom (rename R e) :=
   rename_norm_le e
 
-/-- A morphism is admissible if the induced quotient norm on its image is equivalent to the
+/-- A function is admissible if the induced quotient norm on its image is equivalent to the
 restricted norm from the target. -/
 def IsAdmissibleHom {A B F : Type*} [Norm A] [Norm B] [FunLike F A B] (f : F) : Prop :=
   ∃ C > 0, ∀ x : A, sInf {r : ℝ | ∃ a : A, f a = f x ∧ ‖a‖ = r} ≤ C * ‖f x‖ ∧ ‖f x‖ ≤ C * ‖x‖

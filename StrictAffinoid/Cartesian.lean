@@ -15,318 +15,32 @@ open Module LocalizedModule
 
 open scoped BigOperators Pointwise nonZeroDivisors
 
-theorem Module.smul_top_eq_smul_top_of_isUnit_mul {A M : Type*}
-    [CommSemiring A] [AddCommMonoid M] [Module A M] {u : A} (hu : IsUnit u) (ω : A) :
-    (u * ω) • (⊤ : Submodule A M) = ω • (⊤ : Submodule A M) := by
-  rcases hu with ⟨v, rfl⟩
-  ext x
-  constructor
-  · intro hx
-    rw [Submodule.mem_smul_pointwise_iff_exists] at hx ⊢
-    rcases hx with ⟨m, -, rfl⟩
-    refine ⟨(v : A) • m, Submodule.mem_top, ?_⟩
-    simp [smul_smul, mul_comm]
-  · intro hx
-    rw [Submodule.mem_smul_pointwise_iff_exists] at hx ⊢
-    rcases hx with ⟨m, -, rfl⟩
-    refine ⟨((v⁻¹ : Aˣ) : A) • m, Submodule.mem_top, ?_⟩
-    simp [smul_smul, mul_assoc, mul_comm]
+namespace Submodule
 
-theorem smul_top_eq_top_of_isUnit {A : Type*} [CommSemiring A] {ω : A} (hω : IsUnit ω) :
-    ω • (⊤ : Submodule A A) = ⊤ := by
-  simpa using smul_top_eq_smul_top_of_isUnit_mul hω 1
+variable {α R M : Type*} [Semiring R] [AddCommMonoid M] [Module R M]
+  [Monoid α] [DistribMulAction α M] [SMulCommClass α R M]
+
+theorem smul_pointwise_eq_self_of_isUnit [SMul α R] [IsScalarTower α R M] {N : Submodule R M}
+    {u : α} (hu : IsUnit u) : u • N = N := by
+  ext x
+  rw [N.mem_smul_pointwise_iff_exists]
+  rcases hu with ⟨u, rfl⟩
+  refine ⟨?_, fun hx ↦ ⟨u.inv • x, N.smul_of_tower_mem u.inv hx, by simp [← mul_smul]⟩⟩
+  rintro ⟨m, hm, rfl⟩
+  exact N.smul_of_tower_mem u hm
+
+theorem mul_smul_pointwise_eq_of_isUnit [SMul α R] [IsScalarTower α R M] {N : Submodule R M}
+    {u : α} (hu : IsUnit u) (v : α) : (u * v) • N = v • N := by
+  rw [mul_smul, (v • N).smul_pointwise_eq_self_of_isUnit hu]
+
+end Submodule
 
 theorem Module.smul_top_eq_smul_top_of_field_smul {k A M : Type*}
     [Field k] [CommSemiring A] [Algebra k A] [AddCommMonoid M] [Module A M]
     {c : k} (hc : c ≠ 0) (ω : A) :
     (c • ω) • (⊤ : Submodule A M) = ω • (⊤ : Submodule A M) := by
-  rw [Algebra.smul_def, smul_top_eq_smul_top_of_isUnit_mul
+  rw [Algebra.smul_def, Submodule.mul_smul_pointwise_eq_of_isUnit
     (IsUnit.map (algebraMap k A) (isUnit_iff_ne_zero.mpr hc))]
-
-section Cartesian
-
-variable {A : Type*} [SeminormedRing A] {M : Type*} [SeminormedAddCommGroup M] [Module A M]
-  {σ : Type*} [Fintype σ] (e : σ → M)
-
-/-- A submodule `N` of a seminormed module `M` is strictly closed if  for every `x : M ⧸ N`,
-there exists a lift `m : M` with `‖m‖ = ‖x‖`. -/
-def Submodule.IsStrictlyClosed (N : Submodule A M) : Prop :=
-  ∀ x : M ⧸ N, ∃ m : M, N.mkQ m = x ∧ ‖m‖ = ‖x‖
-
-variable (M) in
-theorem Submodule.top_isStrictlyClosed : (⊤ : Submodule A M).IsStrictlyClosed := by
-  intro x
-  exact ⟨0, Subsingleton.elim _ _, by simp [Subsingleton.elim x 0]⟩
-
-theorem Submodule.IsStrictlyClosed.isClosed {M : Type*} [NormedAddCommGroup M] [Module A M]
-    {N : Submodule A M} (hN : N.IsStrictlyClosed) : IsClosed (N : Set M) := by
-  refine isClosed_of_closure_subset ?_
-  intro x hx
-  have hxnorm : ‖N.mkQ x‖ = 0 := QuotientAddGroup.norm_mk_eq_zero_iff_mem_closure.2 hx
-  rcases hN (N.mkQ x) with ⟨m, hm, hnorm⟩
-  have hm0 : m = 0 := by rw [← norm_eq_zero, hnorm, hxnorm]
-  exact (Submodule.Quotient.mk_eq_zero N).1 (by simpa [hm0] using hm.symm)
-
-theorem Submodule.IsStrictlyClosed.submoduleOf {N K : Submodule A M} (hNK : N ≤ K)
-    (hN : N.IsStrictlyClosed) : (N.submoduleOf K).IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  rcases hN (N.mkQ (m : M)) with ⟨r, hrq, hrnorm⟩
-  have hr_mem : r ∈ K := by
-    have hdiff : r - (m : M) ∈ N := by rwa [← Submodule.Quotient.eq]
-    simpa [sub_eq_add_neg, add_assoc] using K.add_mem (hNK hdiff) m.2
-  let rK : K := ⟨r, hr_mem⟩
-  have hrK_q : (N.submoduleOf K).mkQ rK = (N.submoduleOf K).mkQ m := by
-    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-    simp only [Submodule.submoduleOf, mem_comap, subtype_apply, AddSubgroupClass.coe_sub]
-    rwa [← Submodule.Quotient.eq]
-  refine ⟨rK, hrK_q, le_antisymm ?_ ?_⟩
-  · change ‖r‖ ≤ ‖(N.submoduleOf K).mkQ m‖
-    rw [hrnorm]
-    refine QuotientAddGroup.le_norm_iff.2 ?_
-    intro y hy
-    have hyE : N.mkQ (y : M) = N.mkQ (m : M) := by
-      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-      have hymem : y - m ∈ N.submoduleOf K := by rwa [← Submodule.Quotient.eq]
-      exact hymem
-    rw [← hyE]
-    exact Submodule.Quotient.norm_mk_le N (y : M)
-  · change ‖(N.submoduleOf K).mkQ m‖ ≤ ‖rK‖
-    rw [← hrK_q]
-    exact Submodule.Quotient.norm_mk_le (N.submoduleOf K) rK
-
-theorem Submodule.IsStrictlyClosed.of_contracting_quotient_projection {N : Submodule A M}
-    (Q : M →ₗ[A] M) (hmem : ∀ x, x - Q x ∈ N) (hkill : ∀ x ∈ N, Q x = 0)
-    (hcontr : ∀ x, ‖Q x‖ ≤ ‖x‖) : N.IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  have hqm : N.mkQ (Q m) = N.mkQ m := by
-    simpa [Submodule.mkQ_apply, Submodule.Quotient.eq, neg_sub] using N.neg_mem (hmem m)
-  refine ⟨Q m, hqm, le_antisymm ?_ ?_⟩
-  · refine QuotientAddGroup.le_norm_iff.2 ?_
-    intro y hy
-    have hdiff : y - m ∈ N := by rwa [← Submodule.Quotient.eq]
-    have hQeq : Q y = Q m := by simpa [sub_eq_zero] using hkill (y - m) hdiff
-    grw [← hQeq, hcontr y]
-  · change ‖N.mkQ m‖ ≤ ‖Q m‖
-    rw [← hqm]
-    exact Submodule.Quotient.norm_mk_le N (Q m)
-
-theorem Submodule.isUltrametricDistQuotientOfIsStrictlyClosed
-    {A M : Type*} [SeminormedRing A] [SeminormedAddCommGroup M] [IsUltrametricDist M]
-    [Module A M] (N : Submodule A M) (hN : N.IsStrictlyClosed) : IsUltrametricDist (M ⧸ N) := by
-  refine IsUltrametricDist.isUltrametricDist_of_forall_norm_add_le_max_norm ?_
-  intro x y
-  rcases hN x with ⟨mx, hmx, hmxnorm⟩
-  rcases hN y with ⟨my, hmy, hmynorm⟩
-  rw [← hmxnorm, ← hmynorm, ← hmx, ← hmy, ← map_add]
-  exact (Submodule.Quotient.norm_mk_le N (mx + my)).trans
-    (IsUltrametricDist.norm_add_le_max mx my)
-
-theorem Submodule.isBoundedSMulQuotientOfIsStrictlyClosed
-    {A M : Type*} [SeminormedRing A] [SeminormedAddCommGroup M] [Module A M]
-    [IsBoundedSMul A M] (N : Submodule A M) (hN : N.IsStrictlyClosed) :
-    IsBoundedSMul A (M ⧸ N) := by
-  refine IsBoundedSMul.of_norm_smul_le ?_
-  intro a x
-  rcases hN x with ⟨m, hm, hmnorm⟩
-  rw [← hmnorm, ← hm, ← map_smul]
-  exact (Submodule.Quotient.norm_mk_le N (a • m)).trans (norm_smul_le a m)
-
-theorem Submodule.smul_top_submoduleOf_le_of_smul_le
-    {R X : Type*} [CommSemiring R] [AddCommMonoid X] [Module R X] {N K : Submodule R X} {ω : R}
-    (hωNK : ω • N ≤ K) : ω • (⊤ : Submodule R N) ≤ K.submoduleOf N := by
-  intro x hx
-  rw [Submodule.mem_smul_pointwise_iff_exists] at hx
-  rcases hx with ⟨y, -, hy⟩
-  exact hωNK ⟨(y : X), y.2, congrArg Subtype.val hy⟩
-
-theorem Submodule.restrictScalars_smul_top_eq_of_smul_eq
-    {B R S X : Type*} [CommSemiring B] [CommSemiring R] [CommSemiring S] [Algebra B R] [Algebra B S]
-    [AddCommMonoid X] [Module B X] [Module R X] [Module S X]
-    [IsScalarTower B R X] [IsScalarTower B S X]
-    (a : R) (b : S) (hsmul : ∀ x : X, b • x = a • x) :
-    ((a • (⊤ : Submodule R X)).restrictScalars B) =
-      ((b • (⊤ : Submodule S X)).restrictScalars B) := by
-  ext x
-  constructor <;> intro hx
-  · change x ∈ a • (⊤ : Submodule R X) at hx
-    change x ∈ b • (⊤ : Submodule S X)
-    rw [Submodule.mem_smul_pointwise_iff_exists] at hx ⊢
-    rcases hx with ⟨y, -, hxy⟩
-    exact ⟨y, Submodule.mem_top, by rw [hsmul y, hxy]⟩
-  · change x ∈ b • (⊤ : Submodule S X) at hx
-    change x ∈ a • (⊤ : Submodule R X)
-    rw [Submodule.mem_smul_pointwise_iff_exists] at hx ⊢
-    rcases hx with ⟨y, -, hxy⟩
-    exact ⟨y, Submodule.mem_top, by rw [← hsmul y, hxy]⟩
-
-theorem Submodule.IsStrictlyClosed.trans [IsUltrametricDist M] {N K : Submodule A M}
-    (hN_in_K : (N.submoduleOf K).IsStrictlyClosed) (hK : K.IsStrictlyClosed)
-    (hNK : N ≤ K) : N.IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  rcases hK (K.mkQ m) with ⟨r, hrq, hrnorm⟩
-  have hmr_mem : m - r ∈ K := by
-    have hrm : r - m ∈ K := by rwa [← Submodule.Quotient.eq]
-    simpa [neg_sub] using K.neg_mem hrm
-  let d : K := ⟨m - r, hmr_mem⟩
-  rcases hN_in_K ((N.submoduleOf K).mkQ d) with ⟨s, hsq, hsnorm⟩
-  let z : M := r + (s : M)
-  have hzq : N.mkQ z = N.mkQ m := by
-    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-    have hsd : (s : K) - d ∈ N.submoduleOf K := by rwa [← Submodule.Quotient.eq]
-    have hmain : r + (s : M) - m = (s : M) - (m - r) := by abel
-    simpa [z, hmain] using! hsd
-  refine ⟨z, hzq, le_antisymm ?_ ?_⟩
-  · refine (QuotientAddGroup.le_norm_iff).2 ?_
-    intro y hy
-    have hyN : y - m ∈ N := by rwa [← Submodule.Quotient.eq]
-    have hyKq : K.mkQ y = K.mkQ m := by
-      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-      exact hNK hyN
-    have hr_le_y : ‖r‖ ≤ ‖y‖ := by
-      rw [hrnorm, ← hyKq]
-      exact Submodule.Quotient.norm_mk_le K y
-    have hyr_mem : y - r ∈ K := by
-      have hym : y - m ∈ K := hNK hyN
-      simpa [sub_eq_add_neg, add_assoc] using K.add_mem hym hmr_mem
-    let t : K := ⟨y - r, hyr_mem⟩
-    have htq : (N.submoduleOf K).mkQ t = (N.submoduleOf K).mkQ s := by
-      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-      change (y - r) - (s : M) ∈ N
-      have hyz : y - z ∈ N := by
-        rw [← Submodule.Quotient.eq]
-        exact hy.trans hzq.symm
-      have hmain : (y - r) - (s : M) = y - z := by
-        simp [z, sub_eq_add_neg, add_comm, add_assoc]
-      simpa [hmain] using hyz
-    have hs_le_t : ‖s‖ ≤ ‖t‖ := by
-      rw [hsnorm, ← htq.trans hsq]
-      exact Submodule.Quotient.norm_mk_le (N.submoduleOf K) t
-    have ht_le_y : ‖t‖ ≤ ‖y‖ := by
-      change ‖y - r‖ ≤ ‖y‖
-      grw [← max_eq_left hr_le_y]
-      simpa [sub_eq_add_neg] using IsUltrametricDist.norm_add_le_max y (-r)
-    have hs_le_y : ‖(s : M)‖ ≤ ‖y‖ := hs_le_t.trans ht_le_y
-    have hz_le := IsUltrametricDist.norm_add_le_max r (s : M)
-    grw [hr_le_y, hs_le_y] at hz_le
-    simpa [z] using hz_le
-  · change ‖N.mkQ m‖ ≤ ‖z‖
-    rw [← hzq]
-    exact Submodule.Quotient.norm_mk_le N z
-
-theorem Submodule.IsStrictlyClosed.of_quotient {N K : Submodule A M} (hNK : N ≤ K)
-    (hN : N.IsStrictlyClosed)
-    (hKbar : (K.map N.mkQ).IsStrictlyClosed) : K.IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  let Kbar : Submodule A (M ⧸ N) := K.map N.mkQ
-  rcases hKbar (Kbar.mkQ (N.mkQ m)) with ⟨q, hqK, hqnorm⟩
-  rcases hN q with ⟨r, hrq, hrnorm⟩
-  have hrKq : K.mkQ r = K.mkQ m := by
-    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-    have hqmem : q - N.mkQ m ∈ Kbar := by rwa [← Submodule.Quotient.eq]
-    rcases hqmem with ⟨k, hk, hkq⟩
-    have hrm_q : N.mkQ (r - m) = N.mkQ k := by
-      simpa [map_sub, hrq] using hkq.symm
-    have hdiff : (r - m) - k ∈ N := by rwa [← Submodule.Quotient.eq]
-    simpa [sub_eq_add_neg, add_assoc] using K.add_mem (hNK hdiff) hk
-  refine ⟨r, hrKq, ?_⟩
-  change ‖r‖ = ‖K.mkQ m‖
-  rw [← hrKq]
-  refine le_antisymm ?_ (Submodule.Quotient.norm_mk_le K r)
-  rw [hrnorm, hqnorm, ← hqK]
-  refine (QuotientAddGroup.le_norm_iff).2 ?_
-  intro y hy
-  have hyr : y - r ∈ K := by rwa [← Submodule.Quotient.eq]
-  have hq_y : Kbar.mkQ (N.mkQ y) = Kbar.mkQ q := by
-    simpa [Submodule.mkQ_apply, Submodule.Quotient.eq, ← hrq] using ⟨y - r, hyr, rfl⟩
-  grw [← hq_y, Submodule.mkQ_apply, Quotient.norm_mk_le, Submodule.mkQ_apply, Quotient.norm_mk_le]
-
-theorem Submodule.IsStrictlyClosed.of_linearEquiv
-    {M₂ : Type*} [SeminormedAddCommGroup M₂] [Module A M₂]
-    (e : M ≃ₗ[A] M₂) (he : ∀ x : M, ‖e x‖ = ‖x‖) {N : Submodule A M}
-    (h : (N.map e.toLinearMap).IsStrictlyClosed) : N.IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  let N₂ : Submodule A M₂ := N.map e.toLinearMap
-  rcases h (N₂.mkQ (e m)) with ⟨r₂, hr₂q, hr₂norm⟩
-  have hrq : N.mkQ (e.symm r₂) = N.mkQ m := by
-    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-    have hmem₂ : r₂ - e m ∈ N₂ := by rwa [← Submodule.Quotient.eq]
-    rcases hmem₂ with ⟨n, hn, hn_eq⟩
-    have hdiff : e.symm r₂ - m = n := e.injective (by simp [← hn_eq])
-    simpa [hdiff] using hn
-  refine ⟨e.symm r₂, hrq, ?_⟩
-  change ‖e.symm r₂‖ = ‖N.mkQ m‖
-  refine le_antisymm ?_ ?_
-  · have hquot_le : ‖N₂.mkQ (e m)‖ ≤ ‖N.mkQ m‖ := by
-      refine (QuotientAddGroup.le_norm_iff).2 ?_
-      intro y hy
-      have hy₂ : N₂.mkQ (e y) = N₂.mkQ (e m) := by
-        simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-        have hymem : y - m ∈ N := by rwa [← Submodule.Quotient.eq]
-        exact ⟨y - m, hymem, by simp⟩
-      grw [← hy₂, ← he y]
-      exact Submodule.Quotient.norm_mk_le N₂ (e y)
-    grw [← he, LinearEquiv.apply_symm_apply, hr₂norm, hquot_le]
-  · simpa [← hrq] using Submodule.Quotient.norm_mk_le N (e.symm r₂)
-
-theorem Submodule.restrictScalars_quotient_norm
-    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
-    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
-    (N : Submodule R M) (m : M) : ‖(N.restrictScalars B).mkQ m‖ = ‖N.mkQ m‖ := by
-  refine le_antisymm ?_ ?_
-  · refine QuotientAddGroup.le_norm_iff.2 ?_
-    intro y hy
-    have hyB : (N.restrictScalars B).mkQ y = (N.restrictScalars B).mkQ m := hy
-    rw [← hyB]
-    exact Submodule.Quotient.norm_mk_le (N.restrictScalars B) y
-  · refine QuotientAddGroup.le_norm_iff.2 ?_
-    intro y hy
-    have hyR : N.mkQ y = N.mkQ m := hy
-    rw [← hyR]
-    exact Submodule.Quotient.norm_mk_le N y
-
-theorem Submodule.Quotient.restrictScalarsEquiv_norm
-    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
-    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
-    (N : Submodule R M) (x : M ⧸ N.restrictScalars B) :
-    ‖Submodule.Quotient.restrictScalarsEquiv B N x‖ = ‖x‖ := by
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  change ‖Submodule.Quotient.restrictScalarsEquiv B N ((N.restrictScalars B).mkQ m)‖ =
-    ‖(N.restrictScalars B).mkQ m‖
-  simpa [Submodule.Quotient.restrictScalarsEquiv_mk B N m] using
-    (Submodule.restrictScalars_quotient_norm N m).symm
-
-theorem Submodule.Quotient.restrictScalarsEquiv_symm_norm
-    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
-    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
-    (N : Submodule R M) (x : M ⧸ N) :
-    ‖(Submodule.Quotient.restrictScalarsEquiv B N).symm x‖ = ‖x‖ := by
-  simpa using (Submodule.Quotient.restrictScalarsEquiv_norm N
-    ((Submodule.Quotient.restrictScalarsEquiv B N).symm x)).symm
-
-theorem Submodule.IsStrictlyClosed.of_restrictScalars
-    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
-    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
-    {N : Submodule R M} (h : (N.restrictScalars B).IsStrictlyClosed) :
-    N.IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  rcases h ((N.restrictScalars B).mkQ m) with ⟨r, hrq, hrnorm⟩
-  exact ⟨r, hrq, by simpa [hrnorm] using! Submodule.restrictScalars_quotient_norm N m⟩
-
-theorem Submodule.IsStrictlyClosed.to_restrictScalars
-    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
-    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
-    {N : Submodule R M} (h : N.IsStrictlyClosed) :
-    (N.restrictScalars B).IsStrictlyClosed := by
-  intro x
-  rcases Quot.exists_rep x with ⟨m, rfl⟩
-  rcases h (N.mkQ m) with ⟨r, hrq, hrnorm⟩
-  exact ⟨r, hrq, hrnorm.trans (Submodule.restrictScalars_quotient_norm N m).symm⟩
 
 theorem IsLocalizedModule.mk'_eq_localization_smul
     {R M M' : Type*} (S : Type*) [CommSemiring R] [CommSemiring S]
@@ -340,119 +54,13 @@ theorem IsLocalizedModule.mk'_eq_localization_smul
   rw [← smul_assoc, Algebra.smul_def]
   simp [mul_comm]
 
-theorem Submodule.IsStrictlyClosed.of_ringEquiv
-    {R S : Type*} [NormedCommRing R] [NormedCommRing S]
-    {M : Type*} [NormedAddCommGroup M] [Module S M]
-    (e : R ≃+* S) {N : Submodule S M}
-    (h : let : Algebra R S := e.toRingHom.toAlgebra
-      let : Module R M := Module.compHom M e.toRingHom
-      have : IsScalarTower R S M := by
-        constructor
-        intro r s m
-        change (e r * s) • m = e r • s • m
-        rw [mul_smul]
-      (N.restrictScalars R).IsStrictlyClosed) :
-    N.IsStrictlyClosed := by
-  let : Algebra R S := e.toRingHom.toAlgebra
-  let : Module R M := Module.compHom M e.toRingHom
-  have : IsScalarTower R S M := by
-    constructor
-    intro r s m
-    change (e r * s) • m = e r • s • m
-    rw [mul_smul]
-  exact Submodule.IsStrictlyClosed.of_restrictScalars h
+section Cartesian
 
-theorem Submodule.IsStrictlyClosed.of_isometry
-    {V : Type*} [SeminormedAddCommGroup V] [Module A V]
-    (L : M →ₗ[A] V) (hL : Function.Injective L) (hNorm : ∀ x : M, ‖L x‖ = ‖x‖)
-    {N : Submodule A M} (hStrict : (N.map L).IsStrictlyClosed) :
-    N.IsStrictlyClosed := by
-  classical
-  let e : M ≃ₗ[A] LinearMap.range L :=
-    { toFun := fun x ↦ ⟨L x, ⟨x, rfl⟩⟩
-      invFun := fun y ↦ Classical.choose y.2
-      map_add' x y := Subtype.ext (by simp)
-      map_smul' a x := Subtype.ext (by simp)
-      left_inv := by
-        intro x
-        apply hL
-        exact Classical.choose_spec (show L x ∈ LinearMap.range L from ⟨x, rfl⟩)
-      right_inv := by
-        intro y
-        ext
-        exact Classical.choose_spec y.2 }
-  have hNK : N.map L ≤ LinearMap.range L := by
-    rintro _ ⟨x, _, rfl⟩
-    exact ⟨x, rfl⟩
-  refine Submodule.IsStrictlyClosed.of_linearEquiv e hNorm ?_
-  have hmap_eq : N.map e.toLinearMap = (N.map L).submoduleOf (LinearMap.range L) := by
-    ext y
-    constructor
-    · rintro ⟨x, hx, rfl⟩
-      exact ⟨x, hx, rfl⟩
-    · intro ⟨x, hx, hxy⟩
-      exact ⟨x, hx, Subtype.ext hxy⟩
-  simp [hmap_eq, Submodule.IsStrictlyClosed.submoduleOf hNK hStrict]
-
-/-- The linear equivalence between `K ⧸ N.submoduleOf K` and `K.map N.mkQ` induced by
-the quotient map `N.mkQ`. -/
-noncomputable def Submodule.quotientSubmoduleOfEquivMapMkQ {A M : Type*} [Ring A] [AddCommGroup M]
-    [Module A M] (N K : Submodule A M) : (K ⧸ N.submoduleOf K) ≃ₗ[A] K.map N.mkQ := by
-  let f : K →ₗ[A] K.map N.mkQ :=
-    { toFun := fun k ↦ ⟨N.mkQ (k : M), ⟨(k : M), k.2, rfl⟩⟩
-      map_add' x y := Subtype.ext (by simp)
-      map_smul' a x := Subtype.ext (by simp) }
-  have hker : (N.submoduleOf K) ≤ LinearMap.ker f := by
-    intro x hx
-    ext
-    change Submodule.Quotient.mk (x : M) = Submodule.Quotient.mk 0
-    rw [Submodule.Quotient.eq]
-    simpa using! hx
-  let fQ : (K ⧸ N.submoduleOf K) →ₗ[A] K.map N.mkQ :=
-    (N.submoduleOf K).liftQ f hker
-  refine LinearEquiv.ofBijective fQ ?_
-  constructor
-  · intro x y hxy
-    rcases Quot.exists_rep x with ⟨x0, rfl⟩
-    rcases Quot.exists_rep y with ⟨y0, rfl⟩
-    change fQ ((N.submoduleOf K).mkQ x0) = fQ ((N.submoduleOf K).mkQ y0) at hxy
-    change Submodule.Quotient.mk x0 = Submodule.Quotient.mk y0
-    rw [Submodule.Quotient.eq]
-    change (x0 : M) - (y0 : M) ∈ N
-    rw [← Submodule.Quotient.eq]
-    simpa [fQ, f, Submodule.liftQ_apply] using congrArg Subtype.val hxy
-  · intro z
-    rcases z.2 with ⟨k, hk, hkq⟩
-    refine ⟨(N.submoduleOf K).mkQ ⟨k, hk⟩, ?_⟩
-    ext
-    simpa [fQ, f, Submodule.liftQ_apply] using hkq
-
-theorem Submodule.quotientSubmoduleOfEquivMapMkQ_norm {N K : Submodule A M} (hNK : N ≤ K)
-    (x : K ⧸ N.submoduleOf K) : ‖N.quotientSubmoduleOfEquivMapMkQ K x‖ = ‖x‖ := by
-  rcases Quot.exists_rep x with ⟨k, rfl⟩
-  refine le_antisymm ?_ ?_
-  · refine (QuotientAddGroup.le_norm_iff (r := ‖N.mkQ (k : M)‖)).2 ?_
-    intro y hy
-    have hyN : N.mkQ (y : M) = N.mkQ (k : M) := by
-      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-      have hymem : y - k ∈ N.submoduleOf K := by rwa [← Submodule.Quotient.eq]
-      exact hymem
-    rw [← hyN]
-    exact Submodule.Quotient.norm_mk_le N (y : M)
-  · refine (QuotientAddGroup.le_norm_iff (r := ‖(N.submoduleOf K).mkQ k‖)).2 ?_
-    intro y hy
-    have hymem : y - (k : M) ∈ N := by rwa [← Submodule.Quotient.eq]
-    have hyK : y ∈ K := by simpa [sub_eq_add_neg, add_assoc] using K.add_mem (hNK hymem) k.2
-    let yK : K := ⟨y, hyK⟩
-    have hyDom : (N.submoduleOf K).mkQ yK = (N.submoduleOf K).mkQ k := by
-      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
-      exact hymem
-    rw [← hyDom]
-    exact Submodule.Quotient.norm_mk_le (N.submoduleOf K) yK
+variable {A : Type*} [SeminormedRing A] {M : Type*} [SeminormedAddCommGroup M] [Module A M]
 
 namespace Module
 
-variable (A)
+variable (A) {σ : Type*} [Fintype σ] (e : σ → M)
 
 /-- Let $ M $ be a seminormed $ A $-module. Then $ e_1, \dots, e_n \in M $ form a pseudo-cartesian
 generator if for any $ m \in M $, there exist $ a_i \in A $ such that
@@ -513,8 +121,6 @@ scoped instance IsPseudoCartesian.module_finite [IsPseudoCartesian A M] :
   rw [hm]
   exact Submodule.sum_mem _ fun i _ ↦ Submodule.smul_mem _ _ (Submodule.subset_span ⟨i, rfl⟩)
 
-open IsPseudoCartesian
-
 variable {A M}
 
 theorem IsPseudoCartesian.of_linearEquiv
@@ -525,10 +131,8 @@ theorem IsPseudoCartesian.of_linearEquiv
   refine ⟨σ, hσ, fun i ↦ e.symm (g i), ⟨?_⟩⟩
   intro m
   rcases hg.exists_norm_le (e m) with ⟨a, ha_repr, ha_norm⟩
-  refine ⟨a, ?_, ?_⟩
-  · exact e.injective (by simp [ha_repr])
-  · intro i
-    simp [← he m, (he (e.symm (g i))).symm, ha_norm i]
+  refine ⟨a, e.injective (by simp [ha_repr]), fun i ↦ ?_⟩
+  simp [← he m, (he (e.symm (g i))).symm, ha_norm i]
 
 theorem IsCartesian.of_linearEquiv
     {M₂ : Type*} [SeminormedAddCommGroup M₂] [Module A M₂]
@@ -539,10 +143,8 @@ theorem IsCartesian.of_linearEquiv
   refine ⟨σ, hσ, fun i ↦ e.symm (g i), ⟨⟨?_⟩, ?_⟩⟩
   · intro m
     rcases hg.exists_norm_le (e m) with ⟨a, ha_repr, ha_norm⟩
-    refine ⟨a, ?_, ?_⟩
-    · exact e.injective (by simp [ha_repr])
-    · intro i
-      grw [hsymm_norm (g i), ← he m, ha_norm i]
+    refine ⟨a, e.injective (by simp [ha_repr]), fun i ↦ ?_⟩
+    grw [hsymm_norm (g i), ← he m, ha_norm i]
   · intro m a hm i
     have hm₂ : e m = ∑ j : σ, a j • g j := by simp [hm]
     grw [hsymm_norm (g i), ← he m, hg.norm_le (e m) a hm₂]
@@ -556,9 +158,7 @@ theorem IsPseudoCartesian.extendScalars_of_isometric_algebra
   refine ⟨σ, hσ, e, ⟨?_⟩⟩
   intro m
   rcases he.exists_norm_le m with ⟨a, hm, ha⟩
-  refine ⟨fun i ↦ algebraMap B R (a i), by simp [hm], ?_⟩
-  intro i
-  grw [hnorm, ha i]
+  exact ⟨fun i ↦ algebraMap B R (a i), by simp [hm], fun i ↦ by grw [hnorm, ha i]⟩
 
 theorem IsPseudoCartesian.of_ringEquiv
     {R S : Type*} [NormedCommRing R] [NormedCommRing S]
@@ -573,8 +173,7 @@ theorem IsPseudoCartesian.of_ringEquiv
   rcases hg.exists_norm_le m with ⟨a, ha_repr, ha_norm⟩
   refine ⟨fun i ↦ e (a i), ?_, ?_⟩
   · simpa [Module.compHom] using! ha_repr
-  · intro i
-    simp [he, ha_norm i]
+  · exact fun i ↦ by simp [he, ha_norm i]
 
 theorem IsCartesian.of_ringEquiv
     {R S : Type*} [NormedCommRing R] [NormedCommRing S]
@@ -628,79 +227,12 @@ theorem IsPseudoCartesian.of_submoduleOf {N K : Submodule A M} (hKN : K ≤ N)
     [IsPseudoCartesian A (K.submoduleOf N)] : IsPseudoCartesian A K :=
   IsPseudoCartesian.of_linearEquiv (K.submoduleOfEquivOfLe hKN).symm (fun _ ↦ rfl)
 
-theorem IsPseudoCartesian.of_strict_extension [IsUltrametricDist M] [IsBoundedSMul A M]
-    {N K : Submodule A M}
-    (hNstrict : (N.submoduleOf K).IsStrictlyClosed)
-    [IsPseudoCartesian A (N.submoduleOf K)]
-    [IsPseudoCartesian A (K ⧸ N.submoduleOf K)] : IsPseudoCartesian A K := by
-  let Nₖ : Submodule A K := N.submoduleOf K
-  rcases IsPseudoCartesian.out A Nₖ with ⟨σ, hσ, eN, heN⟩
-  rcases IsPseudoCartesian.out A (K ⧸ Nₖ) with ⟨τ, hτ, eQ, heQ⟩
-  choose lift hliftQ hliftNorm using fun j : τ ↦ hNstrict (eQ j)
-  let e : Sum σ τ → K := fun
-    | Sum.inl i => eN i
-    | Sum.inr j => lift j
-  refine ⟨Sum σ τ, inferInstance, e, ⟨?_⟩⟩
-  intro x
-  rcases heQ.exists_norm_le (Nₖ.mkQ x) with ⟨b, hb_repr, hb_norm⟩
-  let y : K := ∑ j : τ, b j • lift j
-  have hy_norm : ‖y‖ ≤ ‖x‖ := by
-    refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg x) ?_
-    intro j _
-    have h : ‖b j • lift j‖ ≤ ‖b j‖ * ‖lift j‖ := norm_smul_le (b j) (lift j : M)
-    grw [hliftNorm j, hb_norm j] at h
-    exact h.trans (Submodule.Quotient.norm_mk_le Nₖ x)
-  have hy_quot : Nₖ.mkQ y = Nₖ.mkQ x := by
-    rw [hb_repr]
-    simp only [y, Submodule.mkQ_apply, map_sum, map_smul]
-    refine Finset.sum_congr rfl ?_
-    intro j _
-    change b j • Nₖ.mkQ (lift j) = b j • eQ j
-    rw [hliftQ j]
-  let d : Nₖ := ⟨x - y, by rwa [← Submodule.Quotient.eq, eq_comm]⟩
-  have hd_norm : ‖d‖ ≤ ‖x‖ := by
-    change ‖x - y‖ ≤ ‖x‖
-    grw [← max_eq_left hy_norm]
-    simpa [sub_eq_add_neg] using IsUltrametricDist.norm_add_le_max x (-y)
-  rcases heN.exists_norm_le d with ⟨a, ha_repr, ha_norm⟩
-  let c : Sum σ τ → A := fun
-    | Sum.inl i => a i
-    | Sum.inr j => b j
-  refine ⟨c, ?_, ?_⟩
-  · have hsum :
-        (∑ z : Sum σ τ, c z • e z) =
-          (∑ i : σ, a i • (eN i : K)) + ∑ j : τ, b j • lift j := by
-      simp [c, e]
-    have hd_repr_K : (d : K) = ∑ i : σ, a i • (eN i : K) := by
-      simpa using congrArg (fun z : Nₖ ↦ (z : K)) ha_repr
-    rw [hsum, ← hd_repr_K]
-    change x = (x - y) + y
-    abel
-  · rintro (i | j)
-    · exact (ha_norm i).trans hd_norm
-    · have h := hb_norm j
-      grw [← hliftNorm j] at h
-      exact h.trans (Submodule.Quotient.norm_mk_le Nₖ x)
-
-theorem Submodule.isPseudoCartesian_and_isStrictlyClosed_of_quotient
-    [IsUltrametricDist M] [IsBoundedSMul A M] {N K : Submodule A M} (hNK : N ≤ K)
-    [IsPseudoCartesian A N] (hNstrict : N.IsStrictlyClosed)
-    [IsPseudoCartesian A (K ⧸ N.submoduleOf K)]
-    (hQstrict : (K.map N.mkQ).IsStrictlyClosed) :
-    IsPseudoCartesian A K ∧ K.IsStrictlyClosed := by
-  constructor
-  · have : IsPseudoCartesian A (N.submoduleOf K) := IsPseudoCartesian.submoduleOf hNK
-    exact IsPseudoCartesian.of_strict_extension
-      (Submodule.IsStrictlyClosed.submoduleOf hNK hNstrict)
-  · exact Submodule.IsStrictlyClosed.of_quotient hNK hNstrict hQstrict
-
 /-- If $ e_1, \dots, e_n $ boundedly generate $ M $, then it form a pseudo-cartesian generator. -/
 theorem IsBoundedGenerator.isPseudoCartesianGenerator (h : IsBoundedGenerator A e) :
     IsPseudoCartesianGenerator A e where
   exists_norm_le m := by
     rcases h.boundedly_generate m with ⟨a, hm, ha⟩
-    use a, hm
-    intro i
+    refine ⟨a, hm, fun i ↦ ?_⟩
     grw [ha i, h.norm_le_one i]
     simp
 
@@ -766,33 +298,23 @@ theorem IsCartesian.exists_non_zero_cartesianGenerator [IsCartesian A M] :
     rcases he.exists_norm_le m with ⟨a, hm, ha⟩
     refine ⟨fun i : {i : σ // e i ≠ 0} ↦ a i, ?_, ?_⟩
     · rw [hm]
-      have hfilter :
-          (∑ i ∈ (Finset.univ : Finset σ) with e i ≠ 0, a i • e i) = ∑ i : σ, a i • e i := by
-        refine Finset.sum_filter_of_ne ?_
-        intro i _ hterm
-        exact fun hi ↦ hterm (by simp [hi])
+      have hfilter : ∑ i with e i ≠ 0, a i • e i = ∑ i : σ, a i • e i :=
+        Finset.sum_filter_of_ne fun i _ hterm hi ↦ hterm (by simp [hi])
       exact hfilter.symm.trans <| Finset.sum_subtype (Finset.univ.filter (fun i : σ ↦ e i ≠ 0))
         (fun i ↦ by simp) (fun i : σ ↦ a i • e i)
     · exact fun i ↦ ha i
   · intro m a hm i
     let b : σ → A := fun j ↦ if h : e j ≠ 0 then a ⟨j, h⟩ else 0
     have hsum : m = ∑ j : σ, b j • e j := by
-      rw [hm]
-      symm
-      have hfilter :
-          (∑ j ∈ (Finset.univ : Finset σ) with e j ≠ 0, b j • e j) = ∑ j : σ, b j • e j := by
-        refine Finset.sum_filter_of_ne ?_
-        intro j _ hterm
-        exact fun hj ↦ hterm (by simp [hj])
-      have hsubtype : (∑ j ∈ (Finset.univ : Finset σ) with e j ≠ 0, b j • e j) =
-          ∑ j : {j : σ // e j ≠ 0}, a j • e j := by
+      have hfilter : ∑ j with e j ≠ 0, b j • e j = ∑ j : σ, b j • e j :=
+        Finset.sum_filter_of_ne fun j _ hterm hj ↦ hterm (by simp [hj])
+      have hsubtype : ∑ j with e j ≠ 0, b j • e j = ∑ j : {j : σ // e j ≠ 0}, a j • e j := by
         trans ∑ j : {j : σ // e j ≠ 0}, b j • e j
         · exact Finset.sum_subtype (Finset.univ.filter (fun j : σ ↦ e j ≠ 0))
             (fun _ ↦ by simp) (fun j : σ ↦ b j • e j)
-        · refine Finset.sum_congr rfl ?_
-          intro j _
+        · refine Finset.sum_congr rfl fun j _ ↦ ?_
           simp [b, j.2]
-      exact hfilter.symm.trans hsubtype
+      rw [hm, ← hsubtype, hfilter]
     simpa [b, i.2] using he.norm_le m b hsum i
 
 /-- The elements of a cartesian generator that are nonzero form a basis. -/
@@ -810,6 +332,7 @@ theorem Matrix.cramer_mulVec_eq_det_smul {k s : Type*} [Field k] [Fintype s] [De
   have : Invertible A := Matrix.invertibleOfIsUnitDet A hunit
   rw [← Matrix.det_smul_inv_mulVec_eq_cramer A (A.mulVec c) hunit, Matrix.inv_mulVec_eq_vec rfl]
 
+open IsPseudoCartesian in
 /-- Let `k` be a normed field and `M` a cartesian `k`-vector space. If the norm of `M` is
 non-archimedean, then any linear subspace of `M` is cartesian. -/
 instance _root_.Submodule.IsCartesian.of_normedField {k M : Type*} [NormedField k]
@@ -829,8 +352,7 @@ instance _root_.Submodule.IsCartesian.of_normedField {k M : Type*} [NormedField 
     have hxsum : (x : M) = ∑ i : σ, row i x • B i := by simp [row, Module.Basis.coord_apply]
     change ‖(x : M)‖ ≤ C
     grw [hxsum, IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg hC]
-    intro i _
-    grw [norm_smul_le, hcoords]
+    exact fun i _ ↦ by grw [norm_smul_le, hcoords]
   have hrow_span : Submodule.span k (Set.range row) = ⊤ := by
     rw [eq_top_iff]
     intro f _
@@ -869,17 +391,14 @@ instance _root_.Submodule.IsCartesian.of_normedField {k M : Type*} [NormedField 
       simp [mat, hidx]
     · simp [mat, hidx, hij]
   let Candidate := {p : s → σ // (mat p).det ≠ 0}
-  let idxCand : Candidate := ⟨idx, by simp [hmat_idx]⟩
-  have : Nonempty Candidate := ⟨idxCand⟩
+  have : Nonempty Candidate := ⟨⟨idx, by simp [hmat_idx]⟩⟩
   let weight : Candidate → ℝ := fun p ↦ ‖(mat p.1).det‖ * ∏ j : s, ‖B (p.1 j)‖
   obtain ⟨pmax, -, hpmax⟩ := Finset.exists_max_image Finset.univ weight Finset.univ_nonempty
   have hpmax_le (q : Candidate) : weight q ≤ weight pmax := hpmax q (by simp)
   let p : s → σ := pmax.1
   have hdetp : (mat p).det ≠ 0 := pmax.2
-  have hcols : LinearIndependent k (mat p).col :=
-    Matrix.linearIndependent_cols_of_det_ne_zero hdetp
   have hcols' : LinearIndependent k (fun j : s ↦ ψ.equivFun (row (p j))) := by
-    simpa [mat, p, Matrix.col] using! hcols
+    simpa [mat, p, Matrix.col] using! Matrix.linearIndependent_cols_of_det_ne_zero hdetp
   have hker : (ψ.equivFun.symm : (s → k) →ₗ[k] Module.Dual k N).ker = ⊥ :=
     LinearEquiv.ker ψ.equivFun.symm
   have hli_phi : LinearIndependent k (fun j : s ↦ row (p j)) := by
@@ -909,25 +428,23 @@ instance _root_.Submodule.IsCartesian.of_normedField {k M : Type*} [NormedField 
   have hdet_update (k0 : σ) (j : s) :
       (mat (Function.update p j k0)).det = (mat p).det * row k0 (uBasis j) := by
     let A := mat p
-    let b : s → k := ψ.equivFun (row k0)
     let c : s → k := φBasis.equivFun (row k0)
-    have hb : b = A.mulVec c := by
+    have hb : ψ.equivFun (row k0) = A.mulVec c := by
       ext i
-      change ψ.equivFun (row k0) i = A.mulVec c i
       rw [show row k0 = φBasis.equivFun.symm c by simp [c], Module.Basis.equivFun_symm_apply]
       trans ∑ l : s, c l * ψ.equivFun (row (p l)) i
       · simp [hφ_apply]
       · refine Finset.sum_congr rfl ?_
         intro l _
         simp [A, mat, mul_comm]
-    have hmat_update : mat (Function.update p j k0) = A.updateCol j b := by
+    have hmat_update : mat (Function.update p j k0) = A.updateCol j (ψ.equivFun (row k0)) := by
       ext i l
       by_cases hlj : l = j
       · subst hlj
-        simp [A, b, mat]
-      · simp [A, b, mat, Function.update, hlj]
+        simp [A, mat]
+      · simp [A, mat, Function.update, hlj]
     rw [hmat_update]
-    trans A.cramer b j
+    trans A.cramer (ψ.equivFun (row k0)) j
     · rw [Matrix.cramer_apply]
     trans (A.det • c) j
     · rw [hb, Matrix.cramer_mulVec_eq_det_smul A hdetp c]
@@ -951,8 +468,7 @@ instance _root_.Submodule.IsCartesian.of_normedField {k M : Type*} [NormedField 
         simpa [E, Finset.sdiff_singleton_eq_erase] using
           Finset.prod_update_of_mem (by simp) (fun l : s ↦ ‖B (p l)‖) ‖B k0‖
       trans ∏ l : s, Function.update (fun l : s ↦ ‖B (p l)‖) j ‖B k0‖ l
-      · refine Finset.prod_congr rfl ?_
-        intro l _
+      · refine Finset.prod_congr rfl fun l _ ↦ ?_
         by_cases hlj : l = j
         · subst hlj
           simp [qfun]
@@ -991,34 +507,485 @@ instance _root_.Submodule.IsCartesian.of_normedField {k M : Type*} [NormedField 
         rw [hm_sum, map_sum]
         trans ∑ l : γ, (uFinBasis.repr m) l *
             row (p (finEquiv.symm j)) (uFinBasis l)
-        · refine Finset.sum_congr rfl ?_
-          intro l _
+        · refine Finset.sum_congr rfl fun l _ ↦ ?_
           simp [map_smul, smul_eq_mul]
         · rw [Finset.sum_eq_single j]
           · simp [hcoord_uFin]
           · intro l _ hlj
             have hne : j ≠ l := fun h ↦ hlj h.symm
             simp [hcoord_uFin, hne]
-          · intro hj
-            exact (hj (Finset.mem_univ j)).elim
+          · exact fun hj ↦ (hj (Finset.mem_univ j)).elim
       simpa [hrow, huFin_norm j] using hcoord_le m (p (finEquiv.symm j))
   · intro m a hm j
     have hrow : row (p (finEquiv.symm j)) m = a j := by
       rw [hm, map_sum]
       trans ∑ l : γ, a l * row (p (finEquiv.symm j)) (uFinBasis l)
-      · refine Finset.sum_congr rfl ?_
-        intro l _
+      · refine Finset.sum_congr rfl fun l _ ↦ ?_
         simp [map_smul, smul_eq_mul]
       · rw [Finset.sum_eq_single j]
         · simp [hcoord_uFin]
         · intro l _ hlj
           have hne : j ≠ l := fun h ↦ hlj h.symm
           simp [hcoord_uFin, hne]
-        · intro hj
-          exact (hj (Finset.mem_univ j)).elim
+        · exact fun hj ↦ (hj (Finset.mem_univ j)).elim
     simpa [hrow, huFin_norm j] using hcoord_le m (p (finEquiv.symm j))
 
-theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedField k]
+end Module
+
+namespace Submodule
+
+/-- A submodule `N` of a seminormed module `M` is strictly closed if  for every `x : M ⧸ N`,
+there exists a lift `m : M` with `‖m‖ = ‖x‖`. -/
+def IsStrictlyClosed (N : Submodule A M) : Prop :=
+  ∀ x : M ⧸ N, ∃ m : M, N.mkQ m = x ∧ ‖m‖ = ‖x‖
+
+variable (M) in
+theorem top_isStrictlyClosed : (⊤ : Submodule A M).IsStrictlyClosed :=
+  fun x ↦ ⟨0, Subsingleton.elim _ _, by simp [Subsingleton.elim x 0]⟩
+
+theorem IsStrictlyClosed.isClosed {M : Type*} [NormedAddCommGroup M] [Module A M]
+    {N : Submodule A M} (hN : N.IsStrictlyClosed) : IsClosed (N : Set M) := by
+  refine isClosed_of_closure_subset ?_
+  intro x hx
+  have hxnorm : ‖N.mkQ x‖ = 0 := QuotientAddGroup.norm_mk_eq_zero_iff_mem_closure.2 hx
+  rcases hN (N.mkQ x) with ⟨m, hm, hnorm⟩
+  have hm0 : m = 0 := by rw [← norm_eq_zero, hnorm, hxnorm]
+  exact (Submodule.Quotient.mk_eq_zero N).1 (by simpa [hm0] using hm.symm)
+
+theorem IsStrictlyClosed.submoduleOf {N K : Submodule A M} (hNK : N ≤ K)
+    (hN : N.IsStrictlyClosed) : (N.submoduleOf K).IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  rcases hN (N.mkQ (m : M)) with ⟨r, hrq, hrnorm⟩
+  have hr_mem : r ∈ K := by
+    have hdiff : r - (m : M) ∈ N := by rwa [← Submodule.Quotient.eq]
+    simpa [sub_eq_add_neg, add_assoc] using K.add_mem (hNK hdiff) m.2
+  let rK : K := ⟨r, hr_mem⟩
+  have hrK_q : (N.submoduleOf K).mkQ rK = (N.submoduleOf K).mkQ m := by
+    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+    simp only [Submodule.submoduleOf, mem_comap, subtype_apply, AddSubgroupClass.coe_sub]
+    rwa [← Submodule.Quotient.eq]
+  refine ⟨rK, hrK_q, le_antisymm ?_ ?_⟩
+  · change ‖r‖ ≤ ‖(N.submoduleOf K).mkQ m‖
+    rw [hrnorm]
+    refine QuotientAddGroup.le_norm_iff.2 ?_
+    intro y hy
+    have hyE : N.mkQ (y : M) = N.mkQ (m : M) := by
+      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+      have hymem : y - m ∈ N.submoduleOf K := by rwa [← Submodule.Quotient.eq]
+      exact hymem
+    rw [← hyE]
+    exact Submodule.Quotient.norm_mk_le N (y : M)
+  · change ‖(N.submoduleOf K).mkQ m‖ ≤ ‖rK‖
+    rw [← hrK_q]
+    exact Submodule.Quotient.norm_mk_le (N.submoduleOf K) rK
+
+theorem IsStrictlyClosed.of_contracting_quotient_projection {N : Submodule A M}
+    (Q : M →ₗ[A] M) (hmem : ∀ x, x - Q x ∈ N) (hkill : ∀ x ∈ N, Q x = 0)
+    (hcontr : ∀ x, ‖Q x‖ ≤ ‖x‖) : N.IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  have hqm : N.mkQ (Q m) = N.mkQ m := by
+    simpa [Submodule.mkQ_apply, Submodule.Quotient.eq, neg_sub] using N.neg_mem (hmem m)
+  refine ⟨Q m, hqm, le_antisymm ?_ ?_⟩
+  · refine QuotientAddGroup.le_norm_iff.2 ?_
+    intro y hy
+    have hdiff : y - m ∈ N := by rwa [← Submodule.Quotient.eq]
+    have hQeq : Q y = Q m := by simpa [sub_eq_zero] using hkill (y - m) hdiff
+    grw [← hQeq, hcontr y]
+  · change ‖N.mkQ m‖ ≤ ‖Q m‖
+    rw [← hqm]
+    exact Submodule.Quotient.norm_mk_le N (Q m)
+
+theorem isUltrametricDistQuotientOfIsStrictlyClosed
+    {A M : Type*} [SeminormedRing A] [SeminormedAddCommGroup M] [IsUltrametricDist M]
+    [Module A M] (N : Submodule A M) (hN : N.IsStrictlyClosed) : IsUltrametricDist (M ⧸ N) := by
+  refine IsUltrametricDist.isUltrametricDist_of_forall_norm_add_le_max_norm ?_
+  intro x y
+  rcases hN x with ⟨mx, hmx, hmxnorm⟩
+  rcases hN y with ⟨my, hmy, hmynorm⟩
+  rw [← hmxnorm, ← hmynorm, ← hmx, ← hmy, ← map_add]
+  exact (Submodule.Quotient.norm_mk_le N (mx + my)).trans
+    (IsUltrametricDist.norm_add_le_max mx my)
+
+theorem isBoundedSMulQuotientOfIsStrictlyClosed
+    {A M : Type*} [SeminormedRing A] [SeminormedAddCommGroup M] [Module A M]
+    [IsBoundedSMul A M] (N : Submodule A M) (hN : N.IsStrictlyClosed) :
+    IsBoundedSMul A (M ⧸ N) := by
+  refine IsBoundedSMul.of_norm_smul_le ?_
+  intro a x
+  rcases hN x with ⟨m, hm, hmnorm⟩
+  rw [← hmnorm, ← hm, ← map_smul]
+  exact (Submodule.Quotient.norm_mk_le N (a • m)).trans (norm_smul_le a m)
+
+theorem smul_top_submoduleOf_le_of_smul_le
+    {R X : Type*} [CommSemiring R] [AddCommMonoid X] [Module R X] {N K : Submodule R X} {ω : R}
+    (hωNK : ω • N ≤ K) : ω • (⊤ : Submodule R N) ≤ K.submoduleOf N := by
+  intro x hx
+  rw [Submodule.mem_smul_pointwise_iff_exists] at hx
+  rcases hx with ⟨y, -, hy⟩
+  exact hωNK ⟨(y : X), y.2, congrArg Subtype.val hy⟩
+
+theorem restrictScalars_smul_top_eq_of_smul_eq
+    {B R S X : Type*} [CommSemiring B] [CommSemiring R] [CommSemiring S] [Algebra B R] [Algebra B S]
+    [AddCommMonoid X] [Module B X] [Module R X] [Module S X]
+    [IsScalarTower B R X] [IsScalarTower B S X]
+    (a : R) (b : S) (hsmul : ∀ x : X, b • x = a • x) :
+    ((a • (⊤ : Submodule R X)).restrictScalars B) =
+      ((b • (⊤ : Submodule S X)).restrictScalars B) := by
+  ext x
+  constructor <;> intro hx
+  · change x ∈ a • (⊤ : Submodule R X) at hx
+    change x ∈ b • (⊤ : Submodule S X)
+    rw [Submodule.mem_smul_pointwise_iff_exists] at hx ⊢
+    rcases hx with ⟨y, -, hxy⟩
+    exact ⟨y, Submodule.mem_top, by rw [hsmul y, hxy]⟩
+  · change x ∈ b • (⊤ : Submodule S X) at hx
+    change x ∈ a • (⊤ : Submodule R X)
+    rw [Submodule.mem_smul_pointwise_iff_exists] at hx ⊢
+    rcases hx with ⟨y, -, hxy⟩
+    exact ⟨y, Submodule.mem_top, by rw [← hsmul y, hxy]⟩
+
+theorem IsStrictlyClosed.trans [IsUltrametricDist M] {N K : Submodule A M}
+    (hN_in_K : (N.submoduleOf K).IsStrictlyClosed) (hK : K.IsStrictlyClosed)
+    (hNK : N ≤ K) : N.IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  rcases hK (K.mkQ m) with ⟨r, hrq, hrnorm⟩
+  have hmr_mem : m - r ∈ K := by
+    have hrm : r - m ∈ K := by rwa [← Submodule.Quotient.eq]
+    simpa [neg_sub] using K.neg_mem hrm
+  let d : K := ⟨m - r, hmr_mem⟩
+  rcases hN_in_K ((N.submoduleOf K).mkQ d) with ⟨s, hsq, hsnorm⟩
+  let z : M := r + (s : M)
+  have hzq : N.mkQ z = N.mkQ m := by
+    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+    have hsd : (s : K) - d ∈ N.submoduleOf K := by rwa [← Submodule.Quotient.eq]
+    have hmain : r + (s : M) - m = (s : M) - (m - r) := by abel
+    simpa [z, hmain] using! hsd
+  refine ⟨z, hzq, le_antisymm ?_ ?_⟩
+  · refine (QuotientAddGroup.le_norm_iff).2 ?_
+    intro y hy
+    have hyN : y - m ∈ N := by rwa [← Submodule.Quotient.eq]
+    have hyKq : K.mkQ y = K.mkQ m := by
+      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+      exact hNK hyN
+    have hr_le_y : ‖r‖ ≤ ‖y‖ := by
+      rw [hrnorm, ← hyKq]
+      exact Submodule.Quotient.norm_mk_le K y
+    have hyr_mem : y - r ∈ K := by
+      have hym : y - m ∈ K := hNK hyN
+      simpa [sub_eq_add_neg, add_assoc] using K.add_mem hym hmr_mem
+    let t : K := ⟨y - r, hyr_mem⟩
+    have htq : (N.submoduleOf K).mkQ t = (N.submoduleOf K).mkQ s := by
+      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+      change (y - r) - (s : M) ∈ N
+      have hyz : y - z ∈ N := by
+        rw [← Submodule.Quotient.eq]
+        exact hy.trans hzq.symm
+      have hmain : (y - r) - (s : M) = y - z := by
+        simp [z, sub_eq_add_neg, add_comm, add_assoc]
+      simpa [hmain] using hyz
+    have hs_le_t : ‖s‖ ≤ ‖t‖ := by
+      rw [hsnorm, ← htq.trans hsq]
+      exact Submodule.Quotient.norm_mk_le (N.submoduleOf K) t
+    have ht_le_y : ‖t‖ ≤ ‖y‖ := by
+      change ‖y - r‖ ≤ ‖y‖
+      grw [← max_eq_left hr_le_y]
+      simpa [sub_eq_add_neg] using IsUltrametricDist.norm_add_le_max y (-r)
+    have hs_le_y : ‖(s : M)‖ ≤ ‖y‖ := hs_le_t.trans ht_le_y
+    have hz_le := IsUltrametricDist.norm_add_le_max r (s : M)
+    grw [hr_le_y, hs_le_y] at hz_le
+    simpa [z] using hz_le
+  · change ‖N.mkQ m‖ ≤ ‖z‖
+    rw [← hzq]
+    exact Submodule.Quotient.norm_mk_le N z
+
+theorem IsStrictlyClosed.of_quotient {N K : Submodule A M} (hNK : N ≤ K)
+    (hN : N.IsStrictlyClosed)
+    (hKbar : (K.map N.mkQ).IsStrictlyClosed) : K.IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  let Kbar : Submodule A (M ⧸ N) := K.map N.mkQ
+  rcases hKbar (Kbar.mkQ (N.mkQ m)) with ⟨q, hqK, hqnorm⟩
+  rcases hN q with ⟨r, hrq, hrnorm⟩
+  have hrKq : K.mkQ r = K.mkQ m := by
+    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+    have hqmem : q - N.mkQ m ∈ Kbar := by rwa [← Submodule.Quotient.eq]
+    rcases hqmem with ⟨k, hk, hkq⟩
+    have hrm_q : N.mkQ (r - m) = N.mkQ k := by
+      simpa [map_sub, hrq] using hkq.symm
+    have hdiff : (r - m) - k ∈ N := by rwa [← Submodule.Quotient.eq]
+    simpa [sub_eq_add_neg, add_assoc] using K.add_mem (hNK hdiff) hk
+  refine ⟨r, hrKq, ?_⟩
+  change ‖r‖ = ‖K.mkQ m‖
+  rw [← hrKq]
+  refine le_antisymm ?_ (Submodule.Quotient.norm_mk_le K r)
+  rw [hrnorm, hqnorm, ← hqK]
+  refine (QuotientAddGroup.le_norm_iff).2 ?_
+  intro y hy
+  have hyr : y - r ∈ K := by rwa [← Submodule.Quotient.eq]
+  have hq_y : Kbar.mkQ (N.mkQ y) = Kbar.mkQ q := by
+    simpa [Submodule.mkQ_apply, Submodule.Quotient.eq, ← hrq] using ⟨y - r, hyr, rfl⟩
+  grw [← hq_y, Submodule.mkQ_apply, Quotient.norm_mk_le, Submodule.mkQ_apply, Quotient.norm_mk_le]
+
+theorem IsStrictlyClosed.of_linearEquiv
+    {M₂ : Type*} [SeminormedAddCommGroup M₂] [Module A M₂]
+    (e : M ≃ₗ[A] M₂) (he : ∀ x : M, ‖e x‖ = ‖x‖) {N : Submodule A M}
+    (h : (N.map e.toLinearMap).IsStrictlyClosed) : N.IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  let N₂ : Submodule A M₂ := N.map e.toLinearMap
+  rcases h (N₂.mkQ (e m)) with ⟨r₂, hr₂q, hr₂norm⟩
+  have hrq : N.mkQ (e.symm r₂) = N.mkQ m := by
+    simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+    have hmem₂ : r₂ - e m ∈ N₂ := by rwa [← Submodule.Quotient.eq]
+    rcases hmem₂ with ⟨n, hn, hn_eq⟩
+    have hdiff : e.symm r₂ - m = n := e.injective (by simp [← hn_eq])
+    simpa [hdiff] using hn
+  refine ⟨e.symm r₂, hrq, ?_⟩
+  change ‖e.symm r₂‖ = ‖N.mkQ m‖
+  refine le_antisymm ?_ ?_
+  · have hquot_le : ‖N₂.mkQ (e m)‖ ≤ ‖N.mkQ m‖ := by
+      refine (QuotientAddGroup.le_norm_iff).2 ?_
+      intro y hy
+      have hy₂ : N₂.mkQ (e y) = N₂.mkQ (e m) := by
+        simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+        have hymem : y - m ∈ N := by rwa [← Submodule.Quotient.eq]
+        exact ⟨y - m, hymem, by simp⟩
+      grw [← hy₂, ← he y]
+      exact Submodule.Quotient.norm_mk_le N₂ (e y)
+    grw [← he, LinearEquiv.apply_symm_apply, hr₂norm, hquot_le]
+  · simpa [← hrq] using Submodule.Quotient.norm_mk_le N (e.symm r₂)
+
+theorem restrictScalars_quotient_norm
+    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
+    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
+    (N : Submodule R M) (m : M) : ‖(N.restrictScalars B).mkQ m‖ = ‖N.mkQ m‖ := by
+  refine le_antisymm ?_ ?_
+  · refine QuotientAddGroup.le_norm_iff.2 ?_
+    intro y hy
+    have hyB : (N.restrictScalars B).mkQ y = (N.restrictScalars B).mkQ m := hy
+    rw [← hyB]
+    exact Submodule.Quotient.norm_mk_le (N.restrictScalars B) y
+  · refine QuotientAddGroup.le_norm_iff.2 ?_
+    intro y hy
+    have hyR : N.mkQ y = N.mkQ m := hy
+    rw [← hyR]
+    exact Submodule.Quotient.norm_mk_le N y
+
+theorem Quotient.restrictScalarsEquiv_norm
+    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
+    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
+    (N : Submodule R M) (x : M ⧸ N.restrictScalars B) :
+    ‖Submodule.Quotient.restrictScalarsEquiv B N x‖ = ‖x‖ := by
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  change ‖Submodule.Quotient.restrictScalarsEquiv B N ((N.restrictScalars B).mkQ m)‖ =
+    ‖(N.restrictScalars B).mkQ m‖
+  simpa [Submodule.Quotient.restrictScalarsEquiv_mk B N m] using
+    (Submodule.restrictScalars_quotient_norm N m).symm
+
+theorem Quotient.restrictScalarsEquiv_symm_norm
+    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
+    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
+    (N : Submodule R M) (x : M ⧸ N) :
+    ‖(Submodule.Quotient.restrictScalarsEquiv B N).symm x‖ = ‖x‖ := by
+  simpa using (Submodule.Quotient.restrictScalarsEquiv_norm N
+    ((Submodule.Quotient.restrictScalarsEquiv B N).symm x)).symm
+
+theorem IsStrictlyClosed.of_restrictScalars
+    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
+    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
+    {N : Submodule R M} (h : (N.restrictScalars B).IsStrictlyClosed) :
+    N.IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  rcases h ((N.restrictScalars B).mkQ m) with ⟨r, hrq, hrnorm⟩
+  exact ⟨r, hrq, by simpa [hrnorm] using! Submodule.restrictScalars_quotient_norm N m⟩
+
+theorem IsStrictlyClosed.to_restrictScalars
+    {B R : Type*} [SeminormedCommRing B] [SeminormedRing R] [Algebra B R]
+    {M : Type*} [SeminormedAddCommGroup M] [Module R M] [Module B M] [IsScalarTower B R M]
+    {N : Submodule R M} (h : N.IsStrictlyClosed) :
+    (N.restrictScalars B).IsStrictlyClosed := by
+  intro x
+  rcases Quot.exists_rep x with ⟨m, rfl⟩
+  rcases h (N.mkQ m) with ⟨r, hrq, hrnorm⟩
+  exact ⟨r, hrq, hrnorm.trans (Submodule.restrictScalars_quotient_norm N m).symm⟩
+
+theorem IsStrictlyClosed.of_ringEquiv
+    {R S : Type*} [NormedCommRing R] [NormedCommRing S]
+    {M : Type*} [NormedAddCommGroup M] [Module S M]
+    (e : R ≃+* S) {N : Submodule S M}
+    (h : let : Algebra R S := e.toRingHom.toAlgebra
+      let : Module R M := Module.compHom M e.toRingHom
+      have : IsScalarTower R S M := by
+        constructor
+        intro r s m
+        change (e r * s) • m = e r • s • m
+        rw [mul_smul]
+      (N.restrictScalars R).IsStrictlyClosed) :
+    N.IsStrictlyClosed := by
+  let : Algebra R S := e.toRingHom.toAlgebra
+  let : Module R M := Module.compHom M e.toRingHom
+  have : IsScalarTower R S M := by
+    constructor
+    intro r s m
+    change (e r * s) • m = e r • s • m
+    rw [mul_smul]
+  exact Submodule.IsStrictlyClosed.of_restrictScalars h
+
+theorem IsStrictlyClosed.of_isometry
+    {V : Type*} [SeminormedAddCommGroup V] [Module A V]
+    (L : M →ₗ[A] V) (hL : Function.Injective L) (hNorm : ∀ x : M, ‖L x‖ = ‖x‖)
+    {N : Submodule A M} (hStrict : (N.map L).IsStrictlyClosed) :
+    N.IsStrictlyClosed := by
+  classical
+  let e : M ≃ₗ[A] LinearMap.range L :=
+    { toFun := fun x ↦ ⟨L x, ⟨x, rfl⟩⟩
+      invFun := fun y ↦ Classical.choose y.2
+      map_add' x y := Subtype.ext (by simp)
+      map_smul' a x := Subtype.ext (by simp)
+      left_inv := by
+        intro x
+        apply hL
+        exact Classical.choose_spec (show L x ∈ LinearMap.range L from ⟨x, rfl⟩)
+      right_inv := by
+        intro y
+        ext
+        exact Classical.choose_spec y.2 }
+  have hNK : N.map L ≤ LinearMap.range L := by
+    rintro _ ⟨x, _, rfl⟩
+    exact ⟨x, rfl⟩
+  refine Submodule.IsStrictlyClosed.of_linearEquiv e hNorm ?_
+  have hmap_eq : N.map e.toLinearMap = (N.map L).submoduleOf (LinearMap.range L) := by
+    ext y
+    constructor
+    · rintro ⟨x, hx, rfl⟩
+      exact ⟨x, hx, rfl⟩
+    · intro ⟨x, hx, hxy⟩
+      exact ⟨x, hx, Subtype.ext hxy⟩
+  simp [hmap_eq, Submodule.IsStrictlyClosed.submoduleOf hNK hStrict]
+
+/-- The linear equivalence between `K ⧸ N.submoduleOf K` and `K.map N.mkQ` induced by
+the quotient map `N.mkQ`. -/
+noncomputable def quotientSubmoduleOfEquivMapMkQ {A M : Type*} [Ring A] [AddCommGroup M]
+    [Module A M] (N K : Submodule A M) : (K ⧸ N.submoduleOf K) ≃ₗ[A] K.map N.mkQ := by
+  let f : K →ₗ[A] K.map N.mkQ :=
+    { toFun := fun k ↦ ⟨N.mkQ (k : M), ⟨(k : M), k.2, rfl⟩⟩
+      map_add' x y := Subtype.ext (by simp)
+      map_smul' a x := Subtype.ext (by simp) }
+  have hker : (N.submoduleOf K) ≤ LinearMap.ker f := by
+    intro x hx
+    ext
+    change Submodule.Quotient.mk (x : M) = Submodule.Quotient.mk 0
+    rw [Submodule.Quotient.eq]
+    simpa using! hx
+  let fQ : (K ⧸ N.submoduleOf K) →ₗ[A] K.map N.mkQ :=
+    (N.submoduleOf K).liftQ f hker
+  refine LinearEquiv.ofBijective fQ ?_
+  constructor
+  · intro x y hxy
+    rcases Quot.exists_rep x with ⟨x0, rfl⟩
+    rcases Quot.exists_rep y with ⟨y0, rfl⟩
+    change fQ ((N.submoduleOf K).mkQ x0) = fQ ((N.submoduleOf K).mkQ y0) at hxy
+    change Submodule.Quotient.mk x0 = Submodule.Quotient.mk y0
+    rw [Submodule.Quotient.eq]
+    change (x0 : M) - (y0 : M) ∈ N
+    rw [← Submodule.Quotient.eq]
+    simpa [fQ, f, Submodule.liftQ_apply] using congrArg Subtype.val hxy
+  · rintro ⟨_, ⟨k, hk, hkq⟩⟩
+    refine ⟨(N.submoduleOf K).mkQ ⟨k, hk⟩, ?_⟩
+    ext
+    simpa [fQ, f, Submodule.liftQ_apply] using hkq
+
+theorem quotientSubmoduleOfEquivMapMkQ_norm {N K : Submodule A M} (hNK : N ≤ K)
+    (x : K ⧸ N.submoduleOf K) : ‖N.quotientSubmoduleOfEquivMapMkQ K x‖ = ‖x‖ := by
+  rcases Quot.exists_rep x with ⟨k, rfl⟩
+  refine le_antisymm ?_ ?_
+  · refine (QuotientAddGroup.le_norm_iff (r := ‖N.mkQ (k : M)‖)).2 ?_
+    intro y hy
+    have hyN : N.mkQ (y : M) = N.mkQ (k : M) := by
+      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+      have hymem : y - k ∈ N.submoduleOf K := by rwa [← Submodule.Quotient.eq]
+      exact hymem
+    rw [← hyN]
+    exact Submodule.Quotient.norm_mk_le N (y : M)
+  · refine (QuotientAddGroup.le_norm_iff (r := ‖(N.submoduleOf K).mkQ k‖)).2 ?_
+    intro y hy
+    have hymem : y - (k : M) ∈ N := by rwa [← Submodule.Quotient.eq]
+    have hyK : y ∈ K := by simpa [sub_eq_add_neg, add_assoc] using K.add_mem (hNK hymem) k.2
+    let yK : K := ⟨y, hyK⟩
+    have hyDom : (N.submoduleOf K).mkQ yK = (N.submoduleOf K).mkQ k := by
+      simp only [Submodule.mkQ_apply, Submodule.Quotient.eq]
+      exact hymem
+    rw [← hyDom]
+    exact Submodule.Quotient.norm_mk_le (N.submoduleOf K) yK
+
+theorem IsPseudoCartesian.of_strict_extension [IsUltrametricDist M] [IsBoundedSMul A M]
+    {N K : Submodule A M}
+    (hNstrict : (N.submoduleOf K).IsStrictlyClosed)
+    [IsPseudoCartesian A (N.submoduleOf K)]
+    [IsPseudoCartesian A (K ⧸ N.submoduleOf K)] : IsPseudoCartesian A K := by
+  let Nₖ : Submodule A K := N.submoduleOf K
+  rcases IsPseudoCartesian.out A Nₖ with ⟨σ, hσ, eN, heN⟩
+  rcases IsPseudoCartesian.out A (K ⧸ Nₖ) with ⟨τ, hτ, eQ, heQ⟩
+  choose lift hliftQ hliftNorm using fun j : τ ↦ hNstrict (eQ j)
+  let e : Sum σ τ → K := fun
+    | Sum.inl i => eN i
+    | Sum.inr j => lift j
+  refine ⟨Sum σ τ, inferInstance, e, ⟨?_⟩⟩
+  intro x
+  rcases heQ.exists_norm_le (Nₖ.mkQ x) with ⟨b, hb_repr, hb_norm⟩
+  let y : K := ∑ j : τ, b j • lift j
+  have hy_norm : ‖y‖ ≤ ‖x‖ := by
+    refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg x) fun j _ ↦ ?_
+    have h : ‖b j • lift j‖ ≤ ‖b j‖ * ‖lift j‖ := norm_smul_le (b j) (lift j : M)
+    grw [hliftNorm j, hb_norm j] at h
+    exact h.trans (Submodule.Quotient.norm_mk_le Nₖ x)
+  have hy_quot : Nₖ.mkQ y = Nₖ.mkQ x := by
+    rw [hb_repr]
+    simp only [y, Submodule.mkQ_apply, map_sum, map_smul]
+    refine Finset.sum_congr rfl fun j _ ↦ ?_
+    change b j • Nₖ.mkQ (lift j) = b j • eQ j
+    rw [hliftQ j]
+  let d : Nₖ := ⟨x - y, by rwa [← Submodule.Quotient.eq, eq_comm]⟩
+  have hd_norm : ‖d‖ ≤ ‖x‖ := by
+    change ‖x - y‖ ≤ ‖x‖
+    grw [← max_eq_left hy_norm]
+    simpa [sub_eq_add_neg] using IsUltrametricDist.norm_add_le_max x (-y)
+  rcases heN.exists_norm_le d with ⟨a, ha_repr, ha_norm⟩
+  let c : Sum σ τ → A := fun
+    | Sum.inl i => a i
+    | Sum.inr j => b j
+  refine ⟨c, ?_, ?_⟩
+  · have hsum :
+        (∑ z : Sum σ τ, c z • e z) = (∑ i : σ, a i • (eN i : K)) + ∑ j : τ, b j • lift j := by
+      simp [c, e]
+    have hd_repr_K : (d : K) = ∑ i : σ, a i • (eN i : K) := by
+      simpa using congrArg (fun z : Nₖ ↦ (z : K)) ha_repr
+    rw [hsum, ← hd_repr_K]
+    change x = (x - y) + y
+    abel
+  · rintro (i | j)
+    · exact (ha_norm i).trans hd_norm
+    · have h := hb_norm j
+      grw [← hliftNorm j] at h
+      exact h.trans (Submodule.Quotient.norm_mk_le Nₖ x)
+
+theorem isPseudoCartesian_and_isStrictlyClosed_of_quotient
+    [IsUltrametricDist M] [IsBoundedSMul A M] {N K : Submodule A M} (hNK : N ≤ K)
+    [IsPseudoCartesian A N] (hNstrict : N.IsStrictlyClosed)
+    [IsPseudoCartesian A (K ⧸ N.submoduleOf K)]
+    (hQstrict : (K.map N.mkQ).IsStrictlyClosed) :
+    IsPseudoCartesian A K ∧ K.IsStrictlyClosed := by
+  constructor
+  · have : IsPseudoCartesian A (N.submoduleOf K) := IsPseudoCartesian.submoduleOf hNK
+    exact IsPseudoCartesian.of_strict_extension
+      (Submodule.IsStrictlyClosed.submoduleOf hNK hNstrict)
+  · exact Submodule.IsStrictlyClosed.of_quotient hNK hNstrict hQstrict
+
+theorem IsStrictlyClosed.of_normedField {k M : Type*} [NormedField k]
     [NormedAddCommGroup M] [IsUltrametricDist M] [Module k M]
     [IsBoundedSMul k M] [IsCartesian k M] (N : Submodule k M) : N.IsStrictlyClosed := by
   classical
@@ -1080,17 +1047,14 @@ theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedFi
       simp [mat, hidx]
     · simp [mat, hidx, hij]
   let Candidate := {p : s → σ // (mat p).det ≠ 0}
-  let idxCand : Candidate := ⟨idx, by simp [hmat_idx]⟩
-  have : Nonempty Candidate := ⟨idxCand⟩
+  have : Nonempty Candidate := ⟨⟨idx, by simp [hmat_idx]⟩⟩
   let weight : Candidate → ℝ := fun p ↦ ‖(mat p.1).det‖ * ∏ j : s, ‖B (p.1 j)‖
   obtain ⟨pmax, -, hpmax⟩ := Finset.exists_max_image Finset.univ weight Finset.univ_nonempty
   have hpmax_le (q : Candidate) : weight q ≤ weight pmax := hpmax q (by simp)
   let p : s → σ := pmax.1
   have hdetp : (mat p).det ≠ 0 := pmax.2
-  have hcols : LinearIndependent k (mat p).col :=
-    Matrix.linearIndependent_cols_of_det_ne_zero hdetp
   have hcols' : LinearIndependent k (fun j : s ↦ ψ.equivFun (row (p j))) := by
-    simpa [mat, p, Matrix.col] using! hcols
+    simpa [mat, p, Matrix.col] using! Matrix.linearIndependent_cols_of_det_ne_zero hdetp
   have hker : (ψ.equivFun.symm : (s → k) →ₗ[k] Module.Dual k N).ker = ⊥ :=
     LinearEquiv.ker ψ.equivFun.symm
   have hli_phi : LinearIndependent k (fun j : s ↦ row (p j)) := by
@@ -1098,6 +1062,7 @@ theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedFi
     convert hmap using 1
     ext j
     simp [Function.comp, Module.Basis.equivFun_apply]
+  have : Module.Finite k N := IsPseudoCartesian.module_finite k N
   have hspan_phi : Submodule.span k (Set.range (fun j : s ↦ row (p j))) = ⊤ :=
     hli_phi.span_eq_top_of_card_eq_finrank' (Module.finrank_eq_card_basis ψ).symm
   let φBasis : Module.Basis s k (Module.Dual k N) :=
@@ -1127,8 +1092,7 @@ theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedFi
       trans ∑ l : s, c l * ψ.equivFun (row (p l)) i
       · simp [hφ_apply]
       trans ∑ l : s, A i l * c l
-      · refine Finset.sum_congr rfl ?_
-        intro l _
+      · refine Finset.sum_congr rfl fun l _ ↦ ?_
         simp [A, mat, mul_comm]
       · rfl
     have hmat_update : mat (Function.update p j k0) = A.updateCol j (ψ.equivFun (row k0)) := by
@@ -1162,8 +1126,7 @@ theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedFi
         simpa [E, Finset.sdiff_singleton_eq_erase] using
           Finset.prod_update_of_mem (by simp) (fun l : s ↦ ‖B (p l)‖) ‖B k0‖
       trans ∏ l : s, Function.update (fun l : s ↦ ‖B (p l)‖) j ‖B k0‖ l
-      · refine Finset.prod_congr rfl ?_
-        intro l _
+      · refine Finset.prod_congr rfl fun l _ ↦ ?_
         by_cases hlj : l = j
         · subst hlj
           simp [qfun]
@@ -1206,23 +1169,20 @@ theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedFi
         rw [hx_sum, map_sum]
         trans ∑ l : γ, (uFinBasis.repr xN) l *
             row (p (finEquiv.symm j)) (uFinBasis l)
-        · refine Finset.sum_congr rfl ?_
-          intro l _
+        · refine Finset.sum_congr rfl fun l _ ↦ ?_
           simp [map_smul, smul_eq_mul]
         · rw [Finset.sum_eq_single j]
           · simp [hcoord_uFin]
           · intro l _ hlj
             have hne : j ≠ l := fun h ↦ hlj h.symm
             simp [hcoord_uFin, hne]
-          · intro hj
-            exact (hj (Finset.mem_univ j)).elim
+          · exact fun hj ↦ (hj (Finset.mem_univ j)).elim
       simpa [row, xN] using hrow_sum
     have hP : P x = x := by
       dsimp [P]
       simp only [LinearMap.sum_apply, LinearMap.smulRight_apply]
       trans ∑ j : γ, (uFinBasis.repr xN j) • (uFinBasis j)
-      · refine Finset.sum_congr rfl ?_
-        intro j _
+      · refine Finset.sum_congr rfl fun j _ ↦ ?_
         rw [hrow_repr j]
       · exact map_sum N.subtype (fun j : γ ↦ (uFinBasis.repr xN j) • uFinBasis j)
           Finset.univ |>.symm.trans <| congrArg Subtype.val (uFinBasis.sum_repr xN)
@@ -1230,17 +1190,14 @@ theorem _root_.Submodule.IsStrictlyClosed.of_normedField {k M : Type*} [NormedFi
   · intro x
     have hP_norm : ‖P x‖ ≤ ‖x‖ := by
       simp only [P, LinearMap.sum_apply, LinearMap.smulRight_apply]
-      refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg x) ?_
-      intro j _
-      refine (norm_smul_le _ _).trans ?_
+      refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg x) fun j _ ↦ ?_
       have hnorm : ‖(uFinBasis j : M)‖ = ‖B (p (finEquiv.symm j))‖ := huFin_norm j
-      rw [hnorm]
-      exact hcoord_le_ambient x (p (finEquiv.symm j))
+      grw [norm_smul_le, hnorm, hcoord_le_ambient x (p (finEquiv.symm j))]
     change ‖x - P x‖ ≤ ‖x‖
     grw [← max_eq_left hP_norm]
     simpa [sub_eq_add_neg] using IsUltrametricDist.norm_add_le_max x (- P x)
 
-theorem quotient_smul_top_isCartesian_of_scalar_quotient
+theorem _root_.Module.quotient_smul_top_isCartesian_of_scalar_quotient
     {B R : Type*} [NormedCommRing B] [NormedCommRing R] [Algebra B R]
     {F : Type*} [NormedAddCommGroup F] [IsUltrametricDist F]
     [Module R F] [Module B F] [IsScalarTower B R F] [IsBoundedSMul R F]
@@ -1278,8 +1235,7 @@ theorem quotient_smul_top_isCartesian_of_scalar_quotient
           symm
           trans ∑ j : τ, b i j • I.mkQ (lift j)
           · simp [S, Submodule.mkQ_apply, map_sum, Algebra.smul_def]
-          · refine Finset.sum_congr rfl ?_
-            intro j _
+          · refine Finset.sum_congr rfl fun j _ ↦ ?_
             rw [hliftQ j]
         have hmem' : S i - a i ∈ I := by rwa [← Submodule.Quotient.eq, eq_comm]
         simpa [sub_eq_add_neg, add_comm] using I.neg_mem hmem'
@@ -1290,11 +1246,9 @@ theorem quotient_smul_top_isCartesian_of_scalar_quotient
       have hz_sum : (∑ p : ι × τ, c p • (lift p.2 • BF p.1)) = ∑ i : ι, S i • BF i := by
         trans ∑ i : ι, ∑ j : τ, c (i, j) • (lift j • BF i)
         · exact Finset.sum_product _ _ (fun p : ι × τ ↦ c p • (lift p.2 • BF p.1))
-        · refine Finset.sum_congr rfl ?_
-          intro i _
+        · refine Finset.sum_congr rfl fun i _ ↦ ?_
           trans ∑ j : τ, ((algebraMap B R (c (i, j))) * lift j) • BF i
-          · refine Finset.sum_congr rfl ?_
-            intro j _
+          · refine Finset.sum_congr rfl fun j _ ↦ ?_
             rw [← smul_assoc, Algebra.smul_def]
           · rw [Finset.sum_smul]
       have hdiff : m - (∑ p : ι × τ, c p • (lift p.2 • BF p.1)) = ∑ i : ι, (a i - S i) • BF i := by
@@ -1304,8 +1258,7 @@ theorem quotient_smul_top_isCartesian_of_scalar_quotient
         rw [hdiff, Submodule.mem_smul_pointwise_iff_exists]
         refine ⟨∑ i : ι, u i • BF i, Submodule.mem_top, ?_⟩
         rw [Finset.smul_sum]
-        refine Finset.sum_congr rfl ?_
-        intro i _
+        refine Finset.sum_congr rfl fun i _ ↦ ?_
         have hui : ω • u i = a i - S i := by simpa [Algebra.smul_def] using (hu i).2
         rw [smul_smul]
         change (ω • u i) • BF i = (a i - S i) • BF i
@@ -1328,11 +1281,9 @@ theorem quotient_smul_top_isCartesian_of_scalar_quotient
         ∑ i : ι, S i • BF i := by
       trans ∑ i : ι, ∑ j : τ, c (i, j) • (lift j • BF i)
       · exact Finset.sum_product _ _ (fun p : ι × τ ↦ c p • (lift p.2 • BF p.1))
-      · refine Finset.sum_congr rfl ?_
-        intro i _
+      · refine Finset.sum_congr rfl fun i _ ↦ ?_
         trans ∑ j : τ, ((algebraMap B R (c (i, j))) * lift j) • BF i
-        · refine Finset.sum_congr rfl ?_
-          intro j _
+        · refine Finset.sum_congr rfl fun j _ ↦ ?_
           rw [← smul_assoc, Algebra.smul_def]
         · rw [Finset.sum_smul]
     have hq_m_z : N.mkQ m = N.mkQ (∑ p : ι × τ, c p • (lift p.2 • BF p.1)) := by
@@ -1367,8 +1318,7 @@ theorem quotient_smul_top_isCartesian_of_scalar_quotient
       rw [hq]
       trans ∑ j : τ, c (i, j) • I.mkQ (lift j)
       · simp [S, Submodule.mkQ_apply, map_sum, Algebra.smul_def]
-      · refine Finset.sum_congr rfl ?_
-        intro j _
+      · refine Finset.sum_congr rfl fun j _ ↦ ?_
         rw [hliftQ j]
     have hcoord_bound : ‖a i‖ * ‖BF i‖ ≤ ‖m‖ :=
       hBFcart.norm_le m a hm_sum i
@@ -1379,7 +1329,7 @@ theorem quotient_smul_top_isCartesian_of_scalar_quotient
       hq_le, hcoord_bound, hmnorm] at h
     exact h
 
-end Module
+end Submodule
 
 end Cartesian
 
@@ -1443,13 +1393,13 @@ noncomputable def ringNormLocalization : RingNorm (Localization A⁰) := by
     have ha0 : ‖a‖ = 0 := (div_eq_zero_iff.mp hx).resolve_right hbpos.ne'
     simp [norm_eq_zero.mp ha0]
 
-noncomputable instance instNormedRingLocalization : NormedRing (Localization A⁰) where
+noncomputable instance : NormedRing (Localization A⁰) where
   __ := (ringNormLocalization A).toNormedRing
 
 lemma norm_localization_mk (a : A) (b : A⁰) : ‖Localization.mk a b‖ = ‖a‖ / ‖(b : A)‖ :=
   rfl
 
-noncomputable instance instNormedFieldLocalization : NormedField (Localization A⁰) where
+noncomputable instance : NormedField (Localization A⁰) where
   __ := (ringNormLocalization A).toNormedRing
   __ : Field (Localization A⁰) := inferInstance
   norm_mul x y := by
@@ -1553,7 +1503,7 @@ noncomputable def addGroupSeminormLocalized : AddGroupSeminorm (LocalizedModule 
     simpa [hx, hy] using localizedModuleSeminorm_add_mk_le A M m n s t
   neg' x := by rw [localizedModuleSeminormValues_neg]
 
-noncomputable instance instSeminormedLocalized : SeminormedAddCommGroup (LocalizedModule A⁰ M) :=
+noncomputable instance : SeminormedAddCommGroup (LocalizedModule A⁰ M) :=
   (addGroupSeminormLocalized A M).toSeminormedAddCommGroup
 
 lemma localizedModuleSeminorm_add_mk_le_max [IsUltrametricDist M] (m n : M) (s t : A⁰) :
@@ -1602,8 +1552,7 @@ theorem Module.IsCartesianGenerator.smul_ne_zero {k E ι : Type*} [NormedField k
     rcases h.exists_norm_le m with ⟨a, hm, ha⟩
     refine ⟨fun i ↦ (c i)⁻¹ * a i, ?_, ?_⟩
     · rw [hm]
-      refine Finset.sum_congr rfl ?_
-      intro i _
+      refine Finset.sum_congr rfl fun i _ ↦ ?_
       rw [smul_smul]
       congr 1
       field_simp [hc i]
@@ -1616,8 +1565,7 @@ theorem Module.IsCartesianGenerator.smul_ne_zero {k E ι : Type*} [NormedField k
   norm_le m a hm i := by
     have hm' : m = ∑ i, (a i * c i) • e i := by
       rw [hm]
-      refine Finset.sum_congr rfl ?_
-      intro i _
+      refine Finset.sum_congr rfl fun i _ ↦ ?_
       rw [smul_smul]
     have : NormSMulClass k E := NormedDivisionRing.toNormSMulClass
     rw [show ‖a i‖ * ‖c i • e i‖ = ‖a i * c i‖ * ‖e i‖ by
@@ -1660,8 +1608,7 @@ theorem localizedModule_norm_mk_of_isCartesian
       grw [← B.sum_repr m]
       refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg ?_ ?_
       · positivity
-      · intro i _
-        exact (norm_smul_le (B.repr m i) (B i)).trans (hm_coeff_bound i)
+      · exact fun i _ ↦ (norm_smul_le (B.repr m i) (B i)).trans (hm_coeff_bound i)
     rw [div_le_iff₀ hspos]
     nlinarith [hm_bound]
 
@@ -1671,10 +1618,20 @@ theorem localizedModule_mkLinearMap_norm_of_isCartesian [NormOneClass A]
     ‖(mkLinearMap A⁰ F m : LocalizedModule A⁰ F)‖ = ‖m‖ := by
   simp [LocalizedModule.mkLinearMap_apply, localizedModule_norm_mk_of_isCartesian]
 
+noncomputable instance (M : Type*) [NormedAddCommGroup M] [IsUltrametricDist M] [Module A M]
+    [IsBoundedSMul A M] [IsCartesian A M] : NormedAddCommGroup (LocalizedModule A⁰ M) := by
+  refine NormedAddCommGroup.ofSeparation ?_
+  intro x hx
+  induction x using LocalizedModule.induction_on with
+  | h m s =>
+    have hspos : 0 < ‖(s : A)‖ := norm_pos_iff.mpr (nonZeroDivisors.coe_ne_zero s)
+    rw [localizedModule_norm_mk_of_isCartesian A m s] at hx
+    have hm0 : ‖m‖ = 0 := (div_eq_zero_iff.mp hx).resolve_right hspos.ne'
+    simp [norm_eq_zero.mp hm0]
+
 theorem localizedModule_mkLinearMap_injective_of_isCartesian [NormOneClass A]
     {F : Type*} [NormedAddCommGroup F] [IsUltrametricDist F] [Module A F] [IsBoundedSMul A F]
-    [IsCartesian A F] :
-    Function.Injective (mkLinearMap A⁰ F : F →ₗ[A] LocalizedModule A⁰ F) := by
+    [IsCartesian A F] : Function.Injective (mkLinearMap A⁰ F : F →ₗ[A] LocalizedModule A⁰ F) := by
   intro x y hxy
   rw [← sub_eq_zero, ← norm_eq_zero]
   simpa [map_sub, hxy] using (localizedModule_mkLinearMap_norm_of_isCartesian A (x - y)).symm
@@ -1766,18 +1723,6 @@ theorem Submodule.isPseudoCartesian_and_isStrictlyClosed_of_smul_top_quotient
       (Submodule.quotientSubmoduleOfEquivMapMkQ_norm hωK)
   exact Submodule.isPseudoCartesian_and_isStrictlyClosed_of_quotient hωK hωstrict hKbarStrictR
 
-noncomputable instance (A : Type*) [NormedCommRing A] [IsDomain A] [NormMulClass A]
-    (M : Type*) [NormedAddCommGroup M] [IsUltrametricDist M] [Module A M] [IsBoundedSMul A M]
-    [IsCartesian A M] : NormedAddCommGroup (LocalizedModule A⁰ M) := by
-  refine NormedAddCommGroup.ofSeparation ?_
-  intro x hx
-  induction x using LocalizedModule.induction_on with
-  | h m s =>
-    have hspos : 0 < ‖(s : A)‖ := norm_pos_iff.mpr (nonZeroDivisors.coe_ne_zero s)
-    rw [localizedModule_norm_mk_of_isCartesian A m s] at hx
-    have hm0 : ‖m‖ = 0 := (div_eq_zero_iff.mp hx).resolve_right hspos.ne'
-    simp [norm_eq_zero.mp hm0]
-
 /-- The localization of a cartesian module is cartesian. -/
 instance localizedModule_isCartesian_of_isCartesian [NormOneClass A]
     {F : Type*} [NormedAddCommGroup F] [IsUltrametricDist F] [Module A F] [IsBoundedSMul A F]
@@ -1816,8 +1761,7 @@ instance localizedModule_isCartesian_of_isCartesian [NormOneClass A]
       rw [show (‖B.repr m i‖ / ‖(s : A)‖) * ‖B i‖ = (‖B.repr m i‖ * ‖B i‖) / ‖(s : A)‖ by ring]
       exact div_le_div_of_nonneg_right hb hsnonneg
   refine ⟨σ, inferInstance, fun i ↦ BQ i, ⟨⟨?_⟩, ?_⟩⟩
-  · intro x
-    exact ⟨fun i ↦ BQ.repr x i, (BQ.sum_repr x).symm, hcoord_bound x⟩
+  · exact fun x ↦ ⟨fun i ↦ BQ.repr x i, (BQ.sum_repr x).symm, hcoord_bound x⟩
   · intro x a hx i
     have hcoeff : a i = BQ.repr x i := by
       have hrepr_sum : BQ.repr (∑ j : σ, a j • BQ j) i = a i := by
@@ -1849,7 +1793,7 @@ instance localizedModule_isBoundedSMul_of_isCartesian
       simpa [mul_div_assoc] using div_le_div_of_nonneg_right (norm_smul_le a m) (norm_nonneg s.1)
 
 /-- Let `A` be a normed commutative ring, `F` be a cartesian `A`-module,
-  `M\subset F` be a finite `A`-submodule. Then there exist an non-zero element `ω ∈ A` and
+  `M` be a finite generated submodule of `F`. Then there exist an non-zero element `ω ∈ A` and
   a cartesian `A`-submodule `N ⊆ LocalizedModule A⁰ F` such that `ω • N ⊆ M ⊆ N`. -/
 theorem Submodule.exists_cartesian_submodule_envelope [NormOneClass A]
     {F : Type*} [NormedAddCommGroup F] [IsUltrametricDist F] [Module A F] [IsBoundedSMul A F]
@@ -1934,8 +1878,7 @@ theorem Submodule.exists_cartesian_submodule_envelope [NormOneClass A]
     have hsum : (vMQ i : V) = ∑ k, eCoeffA (i, k) • gV k := by
       change δQ • (e i : V) = ∑ k, eCoeffA (i, k) • gV k
       rw [← heCoeff i, Finset.smul_sum]
-      refine Finset.sum_congr rfl ?_
-      intro k _
+      refine Finset.sum_congr rfl fun k _ ↦ ?_
       rw [smul_smul, ← hcoeff k]
       simp [gV]
     rw [hsum]
@@ -1989,7 +1932,7 @@ theorem Submodule.exists_cartesian_submodule_envelope [NormOneClass A]
   have hω_smul_w (i : ι) : ω • wV i = (vMQ i : V) := by
     change (ω : A) • (ωQ⁻¹ • (vMQ i : V)) = (vMQ i : V)
     rw [← smul_assoc, Algebra.smul_def, mul_inv_cancel₀ hωQ, one_smul]
-  have hωN_le : ω • N ≤ M.map L := by
+  have hωN : ω • N ≤ M.map L := by
     intro x hx
     rw [Submodule.mem_smul_pointwise_iff_exists] at hx
     rcases hx with ⟨y, hy, hyx⟩
@@ -1998,8 +1941,7 @@ theorem Submodule.exists_cartesian_submodule_envelope [NormOneClass A]
     rcases hy with ⟨a, ha⟩
     have hsum : ω • y = ∑ i, a i • (vMQ i : V) := by
       rw [← ha, Finset.smul_sum]
-      refine Finset.sum_congr rfl ?_
-      intro i _
+      refine Finset.sum_congr rfl fun i _ ↦ ?_
       rw [smul_smul, mul_comm ω (a i), ← smul_smul, hω_smul_w]
     rw [hsum]
     exact Submodule.sum_mem _ fun i _ ↦ Submodule.smul_mem _ _ (hv_mem_map i)
@@ -2016,8 +1958,7 @@ theorem Submodule.exists_cartesian_submodule_envelope [NormOneClass A]
         one_mul]
     have hg_A : gMQ k = ∑ i, (algebraMap A Q (coeffA (k, i))) • wMQ i := by
       rw [hg_repr]
-      refine Finset.sum_congr rfl ?_
-      intro i _
+      refine Finset.sum_congr rfl fun i _ ↦ ?_
       exact (hterm i).symm
     have hLV : L (g k : F) = ∑ i, coeffA (k, i) • wV i := by
       simpa [gMQ, gV, wV, L] using congrArg Subtype.val hg_A
@@ -2031,13 +1972,11 @@ theorem Submodule.exists_cartesian_submodule_envelope [NormOneClass A]
     rcases hm_span with ⟨a, ha⟩
     have haF : (∑ k, a k • (g k : F)) = m := by simpa using congrArg Subtype.val ha
     simpa [← haF, map_sum] using Submodule.sum_mem _ fun k _ ↦ Submodule.smul_mem _ _ (hg_mem_N k)
-  exact ⟨ω, hω_ne, N, hN_cart, hωN_le, hM_le_N⟩
+  exact ⟨ω, hω_ne, N, hN_cart, hωN, hM_le_N⟩
 
 end norm_localization
 
 namespace TateAlgebra
-
-open IsPseudoCartesian
 
 theorem smul_top_isStrictlyClosed_of_ringEquiv
     {R S : Type*} [SeminormedCommRing R] [SeminormedCommRing S]
@@ -2144,20 +2083,14 @@ lemma polynomialToTate_eq_sum_coeff_lt {A : Type*}
     dsimp [p]
     rw [Polynomial.finsetSum_coeff]
     by_cases hm : m < n
-    · have hfin : (⟨m, hm⟩ : Fin n) ∈ (Finset.univ : Finset (Fin n)) := by simp
-      rw [Finset.sum_eq_single (⟨m, hm⟩ : Fin n)]
+    · rw [Finset.sum_eq_single ⟨m, hm⟩ _ (fun hnot ↦ (hnot (by simp)).elim)]
       · simp
       · intro b _ hbne
         have hbm : (b : ℕ) ≠ m := fun hbval ↦ hbne (Fin.ext hbval)
         simp [Polynomial.coeff_X_pow, hbm.symm]
-      · intro hnot
-        exact (hnot hfin).elim
     · have hcoeff0 : r.coeff m = 0 :=
-        Polynomial.coeff_eq_zero_of_degree_lt
-          (lt_of_lt_of_le hr (by exact_mod_cast Nat.le_of_not_gt hm))
-      rw [hcoeff0]
-      symm
-      apply Finset.sum_eq_zero
+        Polynomial.coeff_eq_zero_of_degree_lt (hr.trans_le (by exact_mod_cast Nat.le_of_not_gt hm))
+      rw [hcoeff0, Finset.sum_eq_zero]
       intro b _
       have hbm : (b : ℕ) ≠ m := fun h ↦ Nat.not_le_of_gt b.2 (h ▸ Nat.le_of_not_gt hm)
       simp [Polynomial.coeff_X_pow, hbm.symm]
@@ -2177,17 +2110,15 @@ lemma polynomialOfFin_coeff {A : Type*} [Semiring A] {n : ℕ} (a : Fin n → A)
   · intro b _ hbne
     have hbm : (b : ℕ) ≠ m := fun hbval ↦ hbne (Fin.ext hbval)
     simp [Polynomial.coeff_X_pow, hbm.symm]
-  · intro hnot
-    exact (hnot (by simp)).elim
+  · exact fun hnot ↦ (hnot (by simp)).elim
 
 lemma polynomialOfFin_coeff_of_le {A : Type*} [Semiring A] {n : ℕ} (a : Fin n → A)
     {m : ℕ} (hm : n ≤ m) : (polynomialOfFin a).coeff m = 0 := by
   dsimp [polynomialOfFin]
   rw [Polynomial.finsetSum_coeff]
-  apply Finset.sum_eq_zero
-  intro b _
-  have hbm : (b : ℕ) ≠ m := fun h ↦ Nat.not_le_of_gt b.2 (h ▸ hm)
-  simp [Polynomial.coeff_X_pow, hbm.symm]
+  exact Finset.sum_eq_zero fun b _ ↦ by
+    have hbm : (b : ℕ) ≠ m := fun h ↦ Nat.not_le_of_gt b.2 (h ▸ hm)
+    simp [Polynomial.coeff_X_pow, hbm.symm]
 
 lemma polynomialOfFin_degree_lt {A : Type*} [Semiring A] {n : ℕ}
     (a : Fin n → A) : (polynomialOfFin a).degree < n := by
@@ -2299,7 +2230,8 @@ theorem smul_top_isStrictlyClosed_self_fin
     ∀ (n : ℕ) (ω : TateAlgebra (Fin n) k), ω ≠ 0 →
       (ω • (⊤ : Ideal (TateAlgebra (Fin n) k))).IsStrictlyClosed
   | 0, ω, hω => by
-      simp [smul_top_eq_top_of_isUnit (fin_zero_isUnit ω hω), Submodule.top_isStrictlyClosed]
+      simp [Submodule.smul_pointwise_eq_self_of_isUnit (ω.fin_zero_isUnit hω),
+        Submodule.top_isStrictlyClosed]
   | n + 1, ω, hω => by
       let eSucc := (tateAlgebraFinSuccEquiv k n).toRingEquiv
       let ω₀ : TateAlgebra (Option (Fin n)) k := eSucc ω
@@ -2312,10 +2244,8 @@ theorem smul_top_isStrictlyClosed_self_fin
         have hc_norm : ‖c‖ = ‖ω₀‖ := he
         have hc_ne : c ≠ 0 := fun hc ↦ hω₀ (by rw [← norm_eq_zero, ← hc_norm, hc, norm_zero])
         let f : TateAlgebra (Option (Fin n)) k := c⁻¹ • ω₀
-        have hf_ne : f ≠ 0 := by
-          intro hf
-          apply hω₀
-          simpa [f, smul_smul, hc_ne] using congrArg (fun z ↦ c • z) hf
+        have hf_ne : f ≠ 0 := fun hf ↦ hω₀ (by
+          simpa [f, smul_smul, hc_ne] using congrArg (fun z ↦ c • z) hf)
         have hf_norm_le_one : ‖f‖ ≤ 1 := by
           refine TateAlgebra.norm_le_of_forall_coeff_le f ?_
           intro d
@@ -2346,7 +2276,7 @@ theorem smul_top_isStrictlyClosed_self_fin
             change ((optionToTate (optionTriangularForward k d hd f)) •
               (⊤ : Submodule _ _)).IsStrictlyClosed
             rcases TateAlgebra.weierstrass_preparation_exists hdist with ⟨we, hw, hu, hdecomp⟩
-            rw [hdecomp, smul_top_eq_smul_top_of_isUnit_mul hu]
+            rw [hdecomp, Submodule.mul_smul_pointwise_eq_of_isUnit hu]
             exact weierstrass_smul_top_isStrictlyClosed hw
           exact smul_top_isStrictlyClosed_of_ringEquiv opt.toRingEquiv
             (fun x ↦ optionToTateAlgEquiv_norm x) (tri f) hopt_strict
@@ -2360,9 +2290,8 @@ theorem smul_top_isStrictlyClosed_self_fin
               (TateAlgebra (Option (Fin n)) k)) =
             f • (⊤ : Submodule (TateAlgebra (Option (Fin n)) k)
               (TateAlgebra (Option (Fin n)) k)) := by
-          have hω₀_eq : ω₀ = c • f := by simp [f, smul_smul, mul_inv_cancel₀ hc_ne]
-          rw [hω₀_eq, Algebra.smul_def]
-          exact smul_top_eq_smul_top_of_isUnit_mul
+          rw [show ω₀ = c • f by simp [f, smul_smul, mul_inv_cancel₀ hc_ne], Algebra.smul_def]
+          exact Submodule.mul_smul_pointwise_eq_of_isUnit
             ((isUnit_iff_ne_zero.mpr hc_ne).map (algebraMap k (TateAlgebra (Option (Fin n)) k))) f
         rwa [hideal]
       exact smul_top_isStrictlyClosed_of_ringEquiv eSucc
@@ -2375,9 +2304,9 @@ theorem smul_top_isStrictlyClosed_self (σ : Type*) [Finite σ]
   have : Fintype σ := Fintype.ofFinite σ
   let eσ : σ ≃ Fin (Fintype.card σ) := Fintype.equivFin σ
   let e := (renameEquiv k eσ).toRingEquiv
-  have heω_ne : e ω ≠ 0 := fun h ↦ hω (by simpa using congrArg e.symm h)
   exact smul_top_isStrictlyClosed_of_ringEquiv e (fun x ↦ rename_norm_eq eσ x) ω <|
-    smul_top_isStrictlyClosed_self_fin (Fintype.card σ) (e ω) heω_ne
+    smul_top_isStrictlyClosed_self_fin (Fintype.card σ) (e ω) <|
+      fun h ↦ hω (by simpa using congrArg e.symm h)
 
 theorem module_smul_top_isStrictlyClosed_of_ring
     {A : Type*} [NormedCommRing A] {M : Type*} [NormedAddCommGroup M] [IsUltrametricDist M]
@@ -2398,8 +2327,7 @@ theorem module_smul_top_isStrictlyClosed_of_ring
     have hdiff : m' - m = ∑ i : ι, (r i - a i) • B i := by
       simp [m', hm_sum, Finset.sum_sub_distrib, sub_smul]
     rw [hdiff]
-    refine Submodule.sum_mem _ ?_
-    intro i _
+    refine Submodule.sum_mem _ fun i _ ↦ ?_
     have hcoord_mem : r i - a i ∈ (ω • (⊤ : Submodule A A)) := by
       have hq := (hr i).1
       change Submodule.Quotient.mk (r i) = Submodule.Quotient.mk (a i) at hq
@@ -2442,7 +2370,7 @@ theorem module_smul_top_isStrictlyClosed_of_ring
   have hr_min (i : ι) : ‖r i‖ ≤ ‖b i‖ := by
     grw [(hr i).2, ← (hr i).1, hcoord_quot i, Submodule.mkQ_apply, Submodule.Quotient.norm_mk_le]
   refine IsUltrametricDist.norm_sum_le_of_forall_le_of_nonneg (norm_nonneg y) ?_
-  intro i _
+  refine fun i _ ↦ ?_
   have hcart : ‖b i‖ * ‖B i‖ ≤ ‖y‖ := by
     have hy_sum_e : y = ∑ i : ι, b i • e i := by
       simpa [B, Module.IsCartesianGenerator.nonzeroBasis] using hy_sum
@@ -2473,7 +2401,7 @@ lemma weierstrass_module_quotient_isCartesian_of_isUnit_mul {A : Type*}
     [IsCartesian (TateAlgebra Unit A) F]
     {u w : TateAlgebra Unit A} {n : ℕ} (hu : IsUnit u) (hw : IsWeierstrassPolynomial w n) :
     IsCartesian A (F ⧸ ((u * w) • (⊤ : Submodule (TateAlgebra Unit A) F))) := by
-  rw [smul_top_eq_smul_top_of_isUnit_mul hu]
+  rw [Submodule.mul_smul_pointwise_eq_of_isUnit hu]
   exact weierstrass_module_quotient_isCartesian hw
 
 universe u v
@@ -2604,7 +2532,6 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_of_rename
     (M : Submodule (TateAlgebra τ k) F) :
     Module.IsPseudoCartesian (TateAlgebra τ k) M ∧ M.IsStrictlyClosed := by
   let eR : TateAlgebra σ k ≃+* TateAlgebra τ k := (renameEquiv k eσ).toRingEquiv
-  have heR : ∀ x : TateAlgebra σ k, ‖eR x‖ = ‖x‖ := rename_norm_eq eσ
   let : Algebra (TateAlgebra σ k) (TateAlgebra τ k) := eR.toRingHom.toAlgebra
   let : Module (TateAlgebra σ k) F := Module.compHom F eR.toRingHom
   have : IsScalarTower (TateAlgebra σ k) (TateAlgebra τ k) F := by
@@ -2612,12 +2539,12 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_of_rename
     intro r s m
     change (eR r * s) • m = eR r • s • m
     rw [mul_smul]
-  have : IsBoundedSMul (TateAlgebra σ k) F := IsBoundedSMul.of_ringEquiv eR heR
-  have : IsCartesian (TateAlgebra σ k) F := Module.IsCartesian.of_ringEquiv eR heR
+  have : IsBoundedSMul (TateAlgebra σ k) F := IsBoundedSMul.of_ringEquiv eR (rename_norm_eq eσ)
+  have : IsCartesian (TateAlgebra σ k) F := Module.IsCartesian.of_ringEquiv eR (rename_norm_eq eσ)
   let MR : Submodule (TateAlgebra σ k) F := M.restrictScalars (TateAlgebra σ k)
   constructor
   · have : Module.IsPseudoCartesian (TateAlgebra σ k) M := (hσ MR).1
-    exact Module.IsPseudoCartesian.of_ringEquiv eR heR
+    exact Module.IsPseudoCartesian.of_ringEquiv eR (rename_norm_eq eσ)
   · exact Submodule.IsStrictlyClosed.of_ringEquiv eR (hσ MR).2
 
 theorem localizedModule_isBoundedSMul_fraction_of_isCartesian
@@ -2637,9 +2564,7 @@ theorem localizedModule_isBoundedSMul_fraction_of_isCartesian
     rcases localizedModuleSeminormValues_nonempty A F x with ⟨r, hr⟩
     exact ⟨‖q0‖ • r, ⟨r, hr, rfl⟩⟩
   have hsub : ‖q0‖ • Sx ⊆ Sy := by
-    intro y hy
-    rcases hy with ⟨r, hr, rfl⟩
-    rcases hr with ⟨m, s, hmk, rfl⟩
+    rintro y ⟨r, ⟨m, s, hmk, rfl⟩, rfl⟩
     refine ⟨a • m, t * s, ?_, ?_⟩
     · simp only [q0, ← hmk, ← Localization.mk_eq_mk'_apply a t, LocalizedModule.mk_smul_mk a m t s]
     · have ht_ne : (t : A) ≠ 0 := (mem_nonZeroDivisors_iff_ne_zero).1 t.2
@@ -2661,6 +2586,7 @@ theorem localizedModule_isBoundedSMul_fraction_of_isCartesian
   change sInf Sy ≤ ‖q0‖ * sInf Sx
   simp [← hscale, hle_sets]
 
+open IsPseudoCartesian in
 set_option maxHeartbeats 250000 in
 theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
     {k : Type u} [NormedField k] [IsUltrametricDist k] [CompleteSpace k] (n : ℕ)
@@ -2681,17 +2607,13 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
   let V := LocalizedModule R⁰ E
   let L : E →ₗ[R] V := mkLinearMap R⁰ E
   refine submodule_pullback_from_fractionScalarExtension (Option (Fin n)) k M ?_
-  obtain ⟨ω, hω, N, hNcart, hωN_le, hMN_le⟩ := Submodule.exists_cartesian_submodule_envelope R M
-  have : IsBoundedSMul R N := by
-    refine IsBoundedSMul.of_norm_smul_le ?_
-    intro r x
-    exact norm_smul_le r (x : V)
+  obtain ⟨ω, hω, N, _, hωN, hMN⟩ := Submodule.exists_cartesian_submodule_envelope R M
+  have : IsBoundedSMul R N := IsBoundedSMul.of_norm_smul_le fun r x ↦ norm_smul_le r (x : V)
   let K : Submodule R V := M.map L
   let KInN : Submodule R N := K.submoduleOf N
-  have hωKInN : ω • (⊤ : Submodule R N) ≤ KInN :=
-    Submodule.smul_top_submoduleOf_le_of_smul_le hωN_le
-  have hωstrict : (ω • (⊤ : Submodule R N)).IsStrictlyClosed := by
-    simpa [R] using smul_top_isStrictlyClosed (Option (Fin n)) k ω hω
+  let Nω : Submodule R N := ω • (⊤ : Submodule R N)
+  have hωKInN : ω • (⊤ : Submodule R N) ≤ KInN := Submodule.smul_top_submoduleOf_le_of_smul_le hωN
+  have hωstrict : Nω.IsStrictlyClosed := smul_top_isStrictlyClosed (Option (Fin n)) k ω hω
   obtain ⟨c, hc, d, hd, m, u, w, hu, hw, hprep⟩ :=
     exists_optionTriangularForward_weierstrass_unit_mul ω hω
   let S := TateAlgebra Unit B
@@ -2720,7 +2642,7 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
     change ‖eRS.symm ((algebraMap B S) b)‖ = ‖b‖
     rw [heSR_norm]
     exact TateAlgebra.norm_algebraMap Unit b
-  have : IsCartesian B (N ⧸ (ω • (⊤ : Submodule R N))) := by
+  have : IsCartesian B (N ⧸ Nω) := by
     let : Module S N := Module.compHom N eRS.symm.toRingHom
     have : IsBoundedSMul S N := IsBoundedSMul.of_ringEquiv eRS.symm heSR_norm
     have : IsCartesian S N := Module.IsCartesian.of_ringEquiv eRS.symm heSR_norm
@@ -2751,23 +2673,21 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
     have hscalar : (c⁻¹ • ω) • (⊤ : Submodule R N) = ω • (⊤ : Submodule R N) :=
       smul_top_eq_smul_top_of_field_smul (inv_ne_zero hc) ω
     have huweq : eRS.symm (u * w) = c⁻¹ • ω := by rw [← hprep', RingEquiv.symm_apply_apply]
-    let Pω : Submodule R N := ω • (⊤ : Submodule R N)
     let Pw : Submodule S N := (u * w) • (⊤ : Submodule S N)
-    have hsubB : Pω.restrictScalars B = Pw.restrictScalars B := by
-      simp only [Pω, ← hscalar]
+    have hsubB : Nω.restrictScalars B = Pw.restrictScalars B := by
+      simp only [Nω, ← hscalar]
       refine Submodule.restrictScalars_smul_top_eq_of_smul_eq (c⁻¹ • ω) (u * w) (fun x ↦ ?_)
       rw [← huweq]
       rfl
-    have : IsCartesian B (N ⧸ Pω.restrictScalars B) := by
+    have : IsCartesian B (N ⧸ Nω.restrictScalars B) := by
       rw [hsubB]
       exact Module.IsCartesian.of_linearEquiv (Submodule.Quotient.restrictScalarsEquiv B Pw) <|
         Submodule.Quotient.restrictScalarsEquiv_norm Pw
     exact Module.IsCartesian.of_linearEquiv
-      (Submodule.Quotient.restrictScalarsEquiv B Pω).symm
-        (Submodule.Quotient.restrictScalarsEquiv_symm_norm Pω)
+      (Submodule.Quotient.restrictScalarsEquiv B Nω).symm
+        (Submodule.Quotient.restrictScalarsEquiv_symm_norm Nω)
   let Nω : Submodule R N := ω • (⊤ : Submodule R N)
   have := hωstrict.isClosed
-  let : Module B (N ⧸ Nω) := Module.compHom (N ⧸ Nω) (algebraMap B R)
   have : IsUltrametricDist (N ⧸ Nω) :=
     Submodule.isUltrametricDistQuotientOfIsStrictlyClosed Nω hωstrict
   have : IsBoundedSMul R (N ⧸ Nω) :=
@@ -2777,9 +2697,8 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
     intro b x
     rcases hωstrict x with ⟨m, hm, hmnorm⟩
     rw [← hmnorm, ← hm]
-    change ‖(algebraMap B R b) • Nω.mkQ m‖ ≤ ‖b‖ * ‖m‖
-    grw [← map_smul, ← hnormBR b, ← norm_smul_le]
-    exact Submodule.Quotient.norm_mk_le Nω ((algebraMap B R b) • m)
+    change ‖Submodule.Quotient.mk ((algebraMap B R) b • m)‖ ≤ ‖b‖ * ‖m‖
+    grw [Submodule.Quotient.norm_mk_le Nω, norm_smul_le, hnormBR b]
   have hKbar : IsPseudoCartesian B ((KInN.map Nω.mkQ).restrictScalars B) ∧
       ((KInN.map Nω.mkQ).restrictScalars B).IsStrictlyClosed :=
     ih ((KInN.map Nω.mkQ).restrictScalars B)
@@ -2791,8 +2710,7 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
     have : IsLocalizedModule R⁰ (LinearMap.id : V →ₗ[R] V) := isLocalizedModule_id R⁰ V Q
     let W : Submodule Q V := Submodule.localized' Q R⁰ (LinearMap.id : V →ₗ[R] V) N
     have hW_eq_span : W = Submodule.span Q (N : Set V) := by simp [W, Submodule.localized'_eq_span]
-    have hNW : N ≤ W.restrictScalars R := by
-      intro x hx
+    have hNW : N ≤ W.restrictScalars R := fun x hx ↦ by
       simpa [hW_eq_span] using Submodule.subset_span hx
     have : IsCartesian Q V := localizedModule_isCartesian_of_isCartesian R
     have : IsBoundedSMul Q V :=
@@ -2834,8 +2752,7 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
     have hmap_eq : (LinearMap.range gN).map e.symm.toLinearMap = LinearMap.range fN := by
       ext y
       constructor
-      · intro ⟨x, hx, hxy⟩
-        rcases hx with ⟨n, rfl⟩
+      · rintro ⟨_, ⟨n, rfl⟩, hxy⟩
         exact ⟨n, by simpa [hesymm_apply n] using hxy⟩
       · rintro ⟨n, rfl⟩
         exact ⟨gN n, ⟨n, rfl⟩, hesymm_apply n⟩
@@ -2856,7 +2773,7 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_option
         simp [n, hval]
     simpa [hgN_range] using! hgNstrict
   have : IsPseudoCartesian R KInN := hKInN.1
-  exact ⟨IsPseudoCartesian.of_submoduleOf hMN_le, hKInN.2.trans hNstrict hMN_le⟩
+  exact ⟨IsPseudoCartesian.of_submoduleOf hMN, hKInN.2.trans hNstrict hMN⟩
 
 theorem submodule_isPseudoCartesian_and_isStrictlyClosed_fin
     {k : Type u} [NormedField k] [IsUltrametricDist k] [CompleteSpace k] (n : ℕ)
@@ -2892,9 +2809,7 @@ theorem submodule_isPseudoCartesian_and_isStrictlyClosed_fin_ulift
   have : IsUltrametricDist E' := by
     refine IsUltrametricDist.isUltrametricDist_of_forall_norm_add_le_max_norm ?_
     exact fun ⟨x⟩ ⟨y⟩ ↦ IsUltrametricDist.norm_add_le_max x y
-  have : IsBoundedSMul R E' := by
-    refine IsBoundedSMul.of_norm_smul_le ?_
-    exact fun a ⟨x⟩ ↦ norm_smul_le a x
+  have : IsBoundedSMul R E' := IsBoundedSMul.of_norm_smul_le fun a ⟨x⟩ ↦ norm_smul_le a x
   have : IsCartesian R E' := Module.IsCartesian.of_linearEquiv e.symm fun _ ↦ rfl
   have hM' := submodule_isPseudoCartesian_and_isStrictlyClosed_fin n (M.map e.toLinearMap)
   constructor
@@ -2920,7 +2835,7 @@ theorem ideal_isBoundedlyGenerated (I : Ideal (TateAlgebra σ k)) :
     IsBoundedlyGenerated (TateAlgebra σ k) I := by
   have : IsPseudoCartesian (TateAlgebra σ k) I :=
     (submodule_isPseudoCartesian_and_isStrictlyClosed σ k I).1
-  apply IsPseudoCartesian.isBoundedlyGenerated_of_value_group_subset k
-  exact fun x ↦ value_group_subset x.1
+  exact IsPseudoCartesian.isBoundedlyGenerated_of_value_group_subset k (TateAlgebra σ k) I
+    fun x ↦ value_group_subset x.1
 
 end TateAlgebra

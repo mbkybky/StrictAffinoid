@@ -14,14 +14,6 @@ public section
 
 namespace Ideal
 
-theorem fg_of_fg_map_of_fg_inf_ker_of_surjective {R S : Type*} [CommRing R]
-    [CommRing S] {f : R →+* S} {I : Ideal R} (hmap : (I.map f).FG) (hk : (I ⊓ (RingHom.ker f)).FG)
-    (hf : Function.Surjective f) : I.FG := by
-  algebraize [f]
-  refine Submodule.fg_of_fg_map_of_fg_inf_ker (Module.compHom.toLinearMap f) ?_ hk
-  have : RingHomSurjective f := ⟨hf⟩
-  simpa [Ideal.map_eq_submodule_map] using! Submodule.FG.restrictScalars_of_surjective hmap hf
-
 lemma fg_of_quotient_map_fg {R : Type*} [CommRing R] {I J : Ideal R}
     (hmap : (Ideal.map (Ideal.Quotient.mk J) I).FG) (hJ : J.FG) (hJI : J ≤ I) : I.FG :=
   fg_of_fg_map_of_fg_inf_ker_of_surjective hmap (by simp [inf_eq_right.mpr hJI, hJ])

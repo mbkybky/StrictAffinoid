@@ -327,7 +327,6 @@ theorem IsStrictAffinoid.isDistinguishedEpi_tfae [IsDistinguished k A] [IsStrict
         simp [Integer.norm_eq, integerMap_val, aI, ha, norm_smul, norm_inv]
       have hb_eq_c : ‖b‖ = ‖c‖ := by
         calc _ = ‖c‖ * (‖c‖⁻¹ * ‖b‖) := by field_simp [norm_ne_zero_iff.mpr hc0]
-          _ = ‖c‖ * ‖(integerMap f) aI‖ := by rw [hbI_eq_norm]
-          _ = ‖c‖ := by simp [hbI_norm]
+          _ = _ := by simp [← hbI_eq_norm, hbI_norm]
       exact ⟨a, ha, hc.symm.trans hb_eq_c.symm⟩
   tfae_finish

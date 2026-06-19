@@ -163,8 +163,7 @@ private lemma isClosed_of_isStrictAffinoid_of_nontriviallyNormed (k : Type*)
       map_smul' _ _ := by
         ext s
         simp [Pi.smul_apply, Finset.smul_sum] }
-  have hTbound : ∀ v : S → A, ‖Tlin v‖ ≤ ((Fintype.card S : ℝ) * ‖c‖) * ‖v‖ := by
-    intro v
+  have hTbound (v : S → A) : ‖Tlin v‖ ≤ ((Fintype.card S : ℝ) * ‖c‖) * ‖v‖ := by
     let C : ℝ := ((Fintype.card S : ℝ) * ‖c‖) * ‖v‖
     have hC : 0 ≤ C := by positivity
     have hbound' (s : S) : ‖Tlin v s‖₊ ≤ Real.toNNReal C := by
@@ -206,8 +205,7 @@ private lemma isClosed_of_isStrictAffinoid_of_nontriviallyNormed (k : Type*)
     { toFun := Sinv
       map_add' := map_add Sinv
       map_smul' := hSinv_Alinear }
-  have hSlin_mem {v : S → A} (hv : ∀ s, v s ∈ I) : ∀ s, Slin v s ∈ I := by
-    intro s
+  have hSlin_mem {v : S → A} (hv : ∀ s, v s ∈ I) (s : S) : Slin v s ∈ I := by
     rw [← congrArg (fun w : S → A ↦ Slin w s) ((Pi.basisFun A S).sum_repr v)]
     simp only [Pi.basisFun_repr, map_sum, map_smul, Finset.sum_apply, Pi.smul_apply, smul_eq_mul]
     refine Ideal.sum_mem _ fun i _ ↦ ?_

@@ -41,9 +41,8 @@ instance : NontriviallyNormedField k := by
   exact IsDiscreteValuationRing.not_a_field' hmax
 
 omit [CompleteSpace k] in
-theorem uniformizer_norm_lt_one (ϖ : 𝒪[k]) (hϖ : Irreducible ϖ) : ‖ϖ.1‖ < 1 := by
-  rw [← Valued.mem_maximalIdeal_iff_norm_lt_one']
-  simp [hϖ.maximalIdeal_eq]
+theorem uniformizer_norm_lt_one (ϖ : 𝒪[k]) (hϖ : Irreducible ϖ) : ‖ϖ.val‖ < 1 := by
+  simp [← Valued.mem_maximalIdeal_iff_norm_lt_one' ϖ, hϖ.maximalIdeal_eq]
 
 omit [CompleteSpace k] in
 theorem coeff_mem_span_uniformizer_pow_of_norm_le {ϖ : 𝒪[k]} (hϖ : Irreducible ϖ) (n : ℕ) :
@@ -75,9 +74,9 @@ theorem mem_span_uniformizer_pow_of_norm_le {ϖ : 𝒪[k]} (hϖ : Irreducible ϖ
   have hc (e : σ →₀ ℕ) : MvPowerSeries.coeff e xO.1 ∈ (Ideal.span {ϖ}) ^ n :=
     coeff_mem_span_uniformizer_pow_of_norm_le hϖ n <| (TateAlgebra.coeff_norm_le x.1 e).trans hx
   have hpow_ne : (ϖ.1 ^ n) ≠ 0 := pow_ne_zero _ (by exact_mod_cast hϖ.ne_zero)
-  have hcoeff_dvd (e : σ →₀ ℕ) : ∃ d : 𝒪[k], MvPowerSeries.coeff e xO.1 = d * ϖ ^ n := by
-    obtain ⟨d, hd⟩ := Ideal.mem_span_singleton'.1 (by simpa [Ideal.span_singleton_pow] using hc e)
-    exact ⟨d, by simp [hd]⟩
+  have hcoeff_dvd (e : σ →₀ ℕ) : ∃ d : 𝒪[k], MvPowerSeries.coeff e xO.1 = d * ϖ ^ n :=
+    (Ideal.mem_span_singleton'.1 (by simpa [Ideal.span_singleton_pow] using hc e)).imp
+      fun d hd ↦ hd.symm
   choose d hd using hcoeff_dvd
   have hcoeff_eq (e : σ →₀ ℕ) : MvPowerSeries.coeff e x.1.1 = (d e : k) * (ϖ.1 ^ n) :=
     congrArg Subtype.val (hd e)
@@ -149,9 +148,7 @@ theorem isAdicComplete_span_uniformizer {ϖ : 𝒪[k]} (hϖ : Irreducible ϖ) :
     have hnorm_sub {m n : ℕ} (hmn : m ≤ n) : ‖(f m - f n).1‖ ≤ ‖ϖ.1‖ ^ m :=
       norm_le_of_mem_span_uniformizer_pow ϖ m <| by
         simpa [SModEq.sub_mem, smul_eq_mul, Ideal.mul_top] using hf hmn
-    have hcauchy : CauchySeq (fun n ↦ (f n).1) := by
-      rw [Metric.cauchySeq_iff]
-      intro ε hε
+    have hcauchy : CauchySeq (fun n ↦ (f n).1) := Metric.cauchySeq_iff.2 fun ε hε ↦ by
       rcases Filter.eventually_atTop.1 (hpow0 (Iio_mem_nhds hε)) with ⟨N, hN⟩
       refine ⟨N, ?_⟩
       intro m hm n hn
@@ -262,9 +259,8 @@ private instance (k : Type*) [NontriviallyNormedField k] [CompleteSpace k] [IsUl
   have hmulMap_inj : Function.Injective mulMap := by
     intro b c hbc
     have hbcI : rB N * b = rB N * c := congrArg Subtype.val hbc
-    have hbcB := congrArg (fun x : Integer k B ↦ x.1) hbcI
     have hscalar : (π.1 ^ N) • b.1 = (π.1 ^ N) • c.1 := by
-      simpa [rB, Integer.mk, Algebra.smul_def] using hbcB
+      simpa [rB, Integer.mk, Algebra.smul_def] using congrArg (fun x ↦ x.1) hbcI
     have hsub : (π.1 ^ N) • (b.1 - c.1) = 0 := by rw [smul_sub, hscalar, sub_self]
     exact Subtype.ext <| sub_eq_zero.mp <|
       (smul_eq_zero.mp hsub).resolve_left (pow_ne_zero _ (norm_pos_iff.mp hπpos))
@@ -293,7 +289,7 @@ theorem integerMap_finite_of_finite_of_discreteValued (f : A →ₐ[k] B) (hf : 
     (integerMap f).toRingHom.Finite := by
   algebraize [f.toRingHom]
   have : Module.Finite A B := RingHom.finite_algebraMap.mp hf
-  exact show Module.Finite (Integer k A) (Integer k B) from inferInstance
+  exact inferInstanceAs (Module.Finite (Integer k A) (Integer k B))
 
 theorem exists_surjective_integerMap_of_discreteValued :
     ∃ (σ : Type) (_ : Fintype σ) (φ : TateAlgebra σ k →ₐ[k] A) (_ : Function.Surjective φ),
@@ -326,16 +322,12 @@ theorem exists_surjective_integerMap_of_discreteValued :
       apply Subtype.ext
       change φ (ρ (c j).1) = φ₀ (c j).1
       simpa using congrArg (fun ψ : TateAlgebra (Fin n) k →ₐ[k] A ↦ ψ (c j).1) hφρ
-    have hX_map (j : Fin m) : (integerMap φ) (XInt j) = y j := by
-      apply Subtype.ext
-      change φ (TateAlgebra.X (Sum.inr j)) = (y j).1
-      simpa [a] using hφX (Sum.inr j)
+    have hX_map (j : Fin m) : (integerMap φ) (XInt j) = y j := Subtype.ext (hφX (Sum.inr j))
     calc _ = ∑ j, (integerMap φ) ((integerMap ρ (c j)) * XInt j) := by simp [z]
-      _ = ∑ j, (algebraMap (Integer k (TateAlgebra (Fin n) k)) (Integer k A) (c j)) * y j := by
-        refine Finset.sum_congr rfl ?_
-        intro j _
-        rw [map_mul, hcoeff_map j, hX_map j]
-        rfl
+      _ = ∑ j, (algebraMap (Integer k (TateAlgebra (Fin n) k)) (Integer k A) (c j)) * y j :=
+        Finset.sum_congr rfl fun j _ ↦ by
+          rw [map_mul, hcoeff_map j, hX_map j]
+          rfl
       _ = b := by simpa [Fintype.linearCombination, Algebra.smul_def] using hc
 
 end IsStrictAffinoid
